@@ -238,7 +238,8 @@ def _run_once(db, platforms, now) -> dict:
 def seed(db, platforms, reset=False):
     from demo_data import CLIENTS
     if reset:  # demo only: wipes the demo collections
-        for coll in ("proposals", "change_log", "audit_events", "runs", "controls", "clients",
+        db.policies.delete_many({"_id": {"$regex": "^custom-"}})
+        for coll in ("proposals", "change_log", "audit_events", "runs", "controls", "clients", "policy_versions",
                      "accounts", "settings", "sandbox_campaigns", "metrics_snapshots"):
             db[coll].delete_many({})
     seed_identity_and_policy(db)

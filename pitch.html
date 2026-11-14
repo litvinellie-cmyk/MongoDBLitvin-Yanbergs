@@ -105,6 +105,8 @@ ol { margin: 6px 0 0; padding-left: 22px; max-width: 65ch; } li { margin-bottom:
       <div class="feat"><b>Memory that changes behavior</b><span>Past moves and results per client. When similar moves backfired, the agent asks a human instead.</span></div>
       <div class="feat"><b>Beyond ads</b><span>AI search visibility (AEO/GEO), competitor ads, SEO vs paid overlap, review replies, tracking health.</span></div>
       <div class="feat"><b>Optimization skills</b><span>Next dollar returns, goal planner, stock-aware ads, search term mining, funnel leaks, experiments, live site audit.</span></div>
+      <div class="feat"><b>Rules in plain English</b><span>Type "never spend more than $150 a day on dental clients". See exactly what it will do. Only the owner can switch it on, and every version is kept.</span></div>
+      <div class="feat"><b>Time machine</b><span>Drag to any past moment and see what the agent knew: rules in force, budgets, what was waiting, the kill switch.</span></div>
       <div class="feat"><b>Client report in plain words</b><span>"Your ads cost $5,213 and brought 142 orders at $36.72 each, better than last week."</span></div>
       <div class="feat"><b>Platform truth check</b><span>Decisions use store or CRM verified conversions, not what Meta or TikTok claim.</span></div>
     </div>
@@ -115,6 +117,7 @@ ol { margin: 6px 0 0; padding-left: 22px; max-width: 65ch; } li { margin-bottom:
     <div class="mongo"><table>
       <tr><th>Atlas feature</th><th>Used for</th></tr>
       <tr><td>Schema validation</td><td><code>policies</code>, <code>actors</code>, <code>proposals</code>, <code>change_log</code>, <code>audit_events</code> reject bad data at the database</td></tr>
+      <tr><td>Versioned documents</td><td><code>policy_versions</code> keeps every version of every rule, so the time machine shows what was in force at any moment</td></tr>
       <tr><td>Change Streams</td><td>Approvals made anywhere are carried out right away</td></tr>
       <tr><td>Vector Search</td><td><code>memories_vec</code> index for recalling similar past decisions per client</td></tr>
       <tr><td>TTL index</td><td>Memories expire after 180 days</td></tr>

@@ -73,7 +73,7 @@ VALIDATED = {
         "properties": {"event": {"bsonType": "string"}, "at": {"bsonType": "date"}},
     },
 }
-PLAIN = ["clients", "memories", "competitor_ads", "ai_visibility", "seo_keywords", "reviews",
+PLAIN = ["clients", "policy_versions", "memories", "competitor_ads", "ai_visibility", "seo_keywords", "reviews",
          "creatives", "products", "search_terms", "experiments", "leads", "brand_docs", "sandbox_campaigns", "controls", "runs"]
 
 INDEXES = {
@@ -90,6 +90,7 @@ INDEXES = {
                      ([("campaign_id", 1), ("event", 1), ("at", -1)], {})],
     "metrics_snapshots": [([("meta.account_id", 1), ("meta.campaign_id", 1), ("ts", -1)], {})],
     "leads": [([("account_id", 1), ("campaign_id", 1), ("created_at", -1)], {})],
+    "policy_versions": [([("at", 1)], {}), ([("policy_id", 1), ("version", -1)], {})],
     "memories": [([("expires_at", 1)], {"expireAfterSeconds": 0}),
                  ([("client_id", 1), ("action_type", 1), ("platform", 1), ("direction", 1)], {})],
 }

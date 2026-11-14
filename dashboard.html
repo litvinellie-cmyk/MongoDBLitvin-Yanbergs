@@ -157,6 +157,15 @@ code { font-size: 12px; }
       <div class="scroll"><table id="conns"></table></div>
     </section>
     <section>
+      <h2>Rules in plain English</h2>
+      <div class="row" style="gap:8px;justify-content:flex-start;flex-wrap:wrap">
+        <input id="ruleIn" placeholder="never spend more than $150 a day on dental clients" style="font:inherit;flex:1;min-width:240px;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink)">
+        <button id="ruleBtn" class="primary">Draft rule</button>
+      </div>
+      <div class="muted" style="margin:6px 0 10px">Type a rule in plain words. You'll see exactly what it will do before it counts. Only the agency owner can switch it on, and every version is kept.</div>
+      <div id="rules"></div>
+    </section>
+    <section>
       <h2>Policies in Atlas</h2>
       <div class="scroll"><table id="pols"></table></div>
     </section>
@@ -165,6 +174,13 @@ code { font-size: 12px; }
     <section>
       <h2>Audit trail</h2>
       <div id="events" class="events"></div>
+    </section>
+    <section>
+      <h2>Time machine</h2>
+      <div class="muted">Drag to any moment and see what the agent knew then: rules in force, budgets, what was waiting, and the kill switch.</div>
+      <input id="tmSlider" type="range" min="0" max="1000" value="1000" style="width:100%;margin:12px 0 4px">
+      <div class="row"><b id="tmTime"></b><button id="tmNow" class="link">Back to now</button></div>
+      <div id="tmBody" style="margin-top:8px"></div>
     </section>
   </div>
 </main>
@@ -327,7 +343,7 @@ function render() {
       '<tr><td colspan="6" class="empty">No changes yet.</td></tr>'));
 
   setHTML("pols", "<tr><th>#</th><th>Policy</th><th>Roles</th><th>Actions</th><th>Effect</th></tr>" +
-    S.policies.map((p) => `<tr><td class="num">${p.priority}</td><td><code>${esc(p._id)}</code><div class="muted">${esc(p.why)}</div></td>
+    S.policies.map((p) => `<tr><td class="num">${p.priority}</td><td><code>${esc(p._id)}</code>${p.active === false ? ' <span class="badge info">' + esc((p.status || "off").toUpperCase()) + " · NOT IN FORCE</span>" : ""}<div class="muted">${esc(p.why)}</div></td>
       <td>${esc(p.roles.join(", "))}</td><td>${esc(p.actions.join(", "))}</td><td>${badge(p.effect)}</td></tr>`).join(""));
 
   setHTML("events", S.events.map((e) => `<div class="ev"><time>${t(e.at)}</time><div>${eventLine(e)}</div></div>`).join("") ||
@@ -429,12 +445,43 @@ function renderSkills() {
   }
   setHTML("skBody", h);
 }
+let TM = null, TMB = null, TM_T = null, TM_TIMER = null;
+async function loadTMBounds() {
+  TMB = await (await fetch("/api/tm/bounds?client=" + encodeURIComponent(CLIENT))).json();
+  TMB.s = new Date(TMB.start).getTime(); TMB.e = new Date(TMB.end).getTime();
+}
+function tmFromSlider() { const v = +$("tmSlider").value; return new Date(TMB.s + (TMB.e - TMB.s) * v / 1000); }
+async function loadTM() {
+  if (!TMB) await loadTMBounds();
+  const t = TM_T || new Date();
+  $("tmTime").textContent = t.toLocaleString();
+  TM = await (await fetch(`/api/tm?client=${encodeURIComponent(CLIENT)}&t=${encodeURIComponent(t.toISOString())}`)).json();
+  const halts = TM.halts.length ? TM.halts.map((h) => `<span class="badge deny">HALTED ${esc(h.scope)}</span> by ${esc(h.by)}`).join(" ") : '<span class="badge allow">RUNNING</span>';
+  const camps = TM.campaigns.filter((c) => c.changed_since);
+  setHTML("tmBody", `<div style="margin-bottom:8px">${halts} · ${TM.rules_active} rules in force · ${TM.changes_so_far} changes made so far · ${TM.waiting.length} waiting for a human</div>
+    ${TM.custom_rules.length ? `<div class="mem"><b>Agency rules in force then:</b> ${TM.custom_rules.map((r) => esc(r.text)).join("; ")}</div>` : ""}
+    ${camps.length ? `<div class="muted" style="margin-top:8px">Different then vs now:</div><table><tr><th>Campaign</th><th>Then</th><th>Now</th></tr>${camps.map((c) => `<tr><td>${esc(c.name)}</td><td>${money(c.budget)} · ${esc(c.status)}</td><td>${money(c.now_budget)} · ${esc(c.now_status)}</td></tr>`).join("")}</table>` : '<div class="muted" style="margin-top:8px">Budgets then were the same as now.</div>'}
+    <div class="muted" style="margin-top:8px">Last events before this moment:</div>
+    ${TM.events.slice(0, 6).map((e) => `<div class="ev"><time>${t2(e.at)}</time><div>${eventLine(e)}</div></div>`).join("")}`);
+}
+const t2 = (d) => new Date(d).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"});
+function renderRules() {
+  const custom = (S.policies || []).filter((p) => String(p._id).startsWith("custom-"));
+  setHTML("rules", custom.length ? custom.map((p) => `<div class="card"><div class="row"><b>"${esc(p.source_text)}"</b>
+      <span class="badge ${p.status === "active" ? "allow" : p.status === "retired" ? "info" : "pending"}">${esc((p.status || "draft").toUpperCase())}</span></div>
+      <div style="margin-top:4px">${esc(p.readback)}</div>
+      <div class="muted" style="margin-top:4px">${badge(p.effect)} priority ${p.priority} · drafted by ${esc(p.drafted_by)}${p.active_by ? " · switched on by " + esc(p.active_by) : ""}</div>
+      <div style="margin-top:8px;text-align:right">${p.status === "draft" ? `<button class="ok" data-rule="${esc(p._id)}" data-act="1">Switch on</button>` : p.status === "active" ? `<button data-rule="${esc(p._id)}" data-act="0">Retire</button>` : ""}</div></div>`).join("")
+    : '<div class="empty">No agency rules yet. Try one above.</div>');
+}
 async function load() {
   const r = await fetch("/api/state?client=" + encodeURIComponent(CLIENT));
   S = await r.json();
   render();
   loadChannels(false);
   loadSkills(false);
+  renderRules();
+  if (!TM_T) { TMB = null; loadTM(); }
 }
 async function explain(id) {
   const x = await (await fetch("/api/explain?id=" + encodeURIComponent(id))).json();
@@ -454,6 +501,15 @@ async function explain(id) {
   $("dlg").showModal();
 }
 document.addEventListener("click", async (ev) => {
+  const rb = ev.target.closest("button[data-rule]");
+  if (rb) return post("/api/rules/decide", {id: rb.dataset.rule, activate: rb.dataset.act === "1"});
+  if (ev.target.id === "ruleBtn") {
+    const text = $("ruleIn").value.trim(); if (!text) return toast("Type a rule first.", false);
+    const j = await post("/api/rules/draft", {text});
+    if (j.ok) $("ruleIn").value = "";
+    return;
+  }
+  if (ev.target.id === "tmNow") { TM_T = null; $("tmSlider").value = 1000; TMB = null; return loadTM(); }
   const sb = ev.target.closest("#skTabs button");
   if (sb) { SKT = sb.dataset.sk; return loadSkills(false); }
   if (ev.target.id === "audBtn") {
@@ -500,6 +556,8 @@ $("haltBtn").onclick = () => {
   const reason = halting ? (prompt("Why are you halting the agent?", "Manual stop") || "") : "";
   post("/api/halt", {halted: halting, reason});
 };
+$("tmSlider").oninput = () => { if (!TMB) return; TM_T = tmFromSlider(); $("tmTime").textContent = TM_T.toLocaleString();
+  clearTimeout(TM_TIMER); TM_TIMER = setTimeout(loadTM, 250); };
 $("client").onchange = () => { CLIENT = $("client").value; try { localStorage.setItem("client", CLIENT); } catch (e) {} load(); };
 $("actor").onchange = () => { try { localStorage.setItem("actor", $("actor").value); } catch (e) {} };
 $("dlgClose").onclick = () => $("dlg").close();

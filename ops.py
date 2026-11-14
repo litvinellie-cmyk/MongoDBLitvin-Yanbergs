@@ -39,8 +39,10 @@ def seed_identity_and_policy(db) -> None:
     for a in DEMO_ACTORS:
         db.actors.replace_one({"_id": a["_id"]}, a, upsert=True)
     for p in DEFAULT_POLICIES:
-        db.policies.replace_one({"_id": p["_id"]}, {**p, "active": True}, upsert=True)
+        db.policies.replace_one({"_id": p["_id"]}, {**p, "active": True, "status": "active"}, upsert=True)
     gate.invalidate()
+    import nl_rules
+    nl_rules.version_all(db)
 
 
 def _oid(pid):

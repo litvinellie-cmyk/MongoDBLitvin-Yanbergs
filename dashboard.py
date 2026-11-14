@@ -17,7 +17,10 @@ from urllib.parse import parse_qs, urlparse
 
 import memory
 import ops
+import nl_rules
 import report
+import timemachine
+from datetime import datetime
 import skills
 from evidence import kpis
 from platforms import PLATFORM_LABELS, build_platforms, utcnow
@@ -174,6 +177,12 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(export_csv(cid))
             return
+        if u.path == "/api/tm/bounds":
+            return self._send(200, timemachine.bounds(DB, parse_qs(u.query).get("client", ["all"])[0]))
+        if u.path == "/api/tm":
+            q = parse_qs(u.query)
+            t = datetime.fromisoformat(q.get("t", [""])[0].replace("Z", "+00:00"))
+            return self._send(200, timemachine.state_at(DB, q.get("client", ["all"])[0], t))
         if u.path == "/api/skills":
             cid = parse_qs(u.query).get("client", ["all"])[0]
             return self._send(200, skills_state(cid))
@@ -203,6 +212,10 @@ class Handler(BaseHTTPRequestHandler):
                                           body.get("comment", ""))
             elif p == "/api/undo":
                 out = ops.undo(DB, PLATFORMS, body["id"], actor)
+            elif p == "/api/rules/draft":
+                out = nl_rules.draft(DB, body.get("text", ""), actor)
+            elif p == "/api/rules/decide":
+                out = nl_rules.decide(DB, body["id"], actor, bool(body.get("activate")))
             elif p == "/api/spike":
                 out = spike(body.get("client"))
             elif p == "/api/forget":

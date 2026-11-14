@@ -54,6 +54,13 @@ Each client has a **Channels** section with six tabs (simulated data in the demo
 
 Keyword pauses and review replies use the same gate, approval roles, verification and audit trail as budget changes.
 
+## Rules in plain English and the time machine
+
+| Feature | What it does |
+|---|---|
+| Rules in plain English | Staff type a rule such as "never spend more than $150 a day on dental clients" or "always ask before pausing anything on Reddit". It becomes a draft policy with a plain readback of exactly what it will do. Only the agency owner can switch it on or retire it, and every version is stored in `policy_versions`. The parser covers common agency rules; with an LLM key the same draft and approve flow would accept any wording, and the safety comes from a human approving the readback |
+| Time machine | Drag a slider to any past moment and see what the agent knew then: rules in force, kill switch state, budgets then vs now, what was waiting for a human, and the last events. Rebuilt from `policy_versions`, `audit_events`, `change_log` and `proposals` |
+
 ## Optimization skills
 
 | Skill | What it does |
