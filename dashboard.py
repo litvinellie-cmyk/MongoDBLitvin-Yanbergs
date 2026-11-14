@@ -186,8 +186,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         u = urlparse(self.path)
-        if u.path == "/":
-            return self._send(200, PAGE, "text/html; charset=utf-8")
+        if u.path == "/":  # read fresh each time so page updates need no restart
+            return self._send(200, (Path(__file__).parent / "dashboard.html").read_bytes(), "text/html; charset=utf-8")
         if u.path == "/api/state":
             return self._send(200, state(parse_qs(u.query).get("client", ["all"])[0]))
         if u.path == "/report":

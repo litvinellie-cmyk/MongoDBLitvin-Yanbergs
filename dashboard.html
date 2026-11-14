@@ -166,6 +166,18 @@ button:active { transform: scale(.97); }
 #rpFeed { max-height: 130px; overflow: hidden; font-size: 12px; display: grid; gap: 3px; }
 #rpFeed div { animation: fadeIn .3s ease-out both; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } }
+.pcard { border: 1px solid var(--line); border-radius: 12px; margin-bottom: 8px; background: var(--panel); transition: box-shadow .15s, border-color .15s; }
+.pcard:hover { border-color: var(--allow); box-shadow: 0 4px 14px rgba(0, 30, 43, .07); }
+.pmain { display: flex; align-items: center; gap: 12px; padding: 10px 12px; flex-wrap: wrap; }
+.pwhat { flex: 1; min-width: 220px; }
+.pwhy { color: var(--muted); font-size: 13px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 560px; }
+.pcard.open .pwhy { white-space: normal; }
+.pbtns { display: flex; gap: 8px; align-items: center; }
+.chg { font-weight: 600; font-size: 13px; padding: 2px 8px; border-radius: 999px; background: var(--info-bg); color: var(--info); margin-left: 6px; white-space: nowrap; }
+.chg.up { background: var(--allow-bg); color: var(--allow); } .chg.down { background: var(--wait-bg); color: var(--wait); }
+.pdetail { display: none; padding: 0 14px 12px; border-top: 1px dashed var(--line); padding-top: 10px; animation: fadeIn .2s ease-out; }
+.pcard.open .pdetail { display: block; }
+.pcard.open .pmore::after { content: " ▴"; } .pcard:not(.open) .pmore::after { content: " ▾"; }
 #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); max-width: 90vw;
   padding: 12px 18px; border-radius: 12px; font-weight: 600; display: none; z-index: 7; box-shadow: 0 8px 30px rgba(0, 30, 43, .2);
   animation: slideUp .3s ease-out; }
@@ -337,6 +349,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":
 const money = (n) => n == null ? "n/a" : "$" + Number(n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
 const t = (d) => d ? new Date(d).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"}) : "";
 let S = null;
+const OPEN_P = new Set();
 const SEEN = new Set(); let SEEN_READY = false;
 // Only touch the DOM when content changed, so buttons are not swapped out mid click.
 const setHTML = (id, html) => { const el = $(id); if (el._last !== html) { el.innerHTML = html; el._last = html; } };
@@ -476,17 +489,32 @@ function render() {
       <td class="k x">${n0(k.cvr, 2)}%</td>
       <td class="k">${money(k.cpa)}<div class="muted">${money(c.target_cpl)}</div></td><td class="k x">${k.roas == null ? "n/a" : n0(k.roas, 2) + "x"}</td></tr>`; }).join(""));
 
-  setHTML("props", S.proposals.length ? S.proposals.map((p) => `<div class="card">
-      <div class="row"><b>${plat(p.platform)} ${esc(p.campaign_id)}: ${esc(p.action.type)} ${p.action.type === "set_budget" ? money(p.action.old) + " → " + money(p.action.new) : p.action.type === "set_targeting" ? "ages " + p.action.new.age_min + " to " + p.action.new.age_max : p.action.label ? esc(p.action.label) : ""}</b>
-      <span class="muted">${esc(p.policy_id)}</span></div>
-      <div>${esc(p.reason.text.replace(/ Memory:.*$/, ""))}</div>
-      ${p.reason.memory && p.reason.memory.summary ? `<div class="mem ${p.reason.memory.warning ? "warn" : ""}"><b>${p.reason.memory.warning ? "⚠ Memory changed this decision" : "Memory"}</b> (${esc(p.reason.memory.method)}): ${esc(p.reason.memory.summary)}
-        <div class="muted">${p.reason.memory.hits.map((h) => esc(h.text)).join("<br>")}</div></div>` : ""}
-      ${p.policy_why ? `<div class="muted" style="margin-top:6px">Why a human: ${esc(p.policy_why)}</div>` : ""}
-      ${evidenceHTML(p.reason.evidence)}
-      <div class="row" style="margin-top:8px"><span class="muted">asked by ${esc(p.requested_by)} · <button class="link" data-explain="${esc(p.action_id)}">${esc(p.action_id)}</button>${p.ticket ? ` · <a href="${esc(p.ticket.url)}" target="_blank" rel="noopener">GitHub #${p.ticket.number}</a>` : ""}</span>
-      <span><button data-decide="reject" data-id="${esc(p._id)}">Reject</button> <button class="ok" data-decide="approve" data-id="${esc(p._id)}">Approve</button></span></div>
-    </div>`).join("") : '<div class="empty">Nothing waiting.</div>');
+  const TITLE = {set_budget: "Change budget", pause: "Pause campaign", set_targeting: "Narrow targeting",
+    pause_keyword: "Pause paid keyword", add_negative: "Block search term", reply_review: "Reply to review",
+    set_frequency_cap: "Lower retargeting budget", fix_utm: "Fix tracking link", sync_exclusions: "Sync buyer list"};
+  const what = (p) => { const a = p.action;
+    if (a.type === "set_budget") { const up = a.new > a.old; return `<span class="chg ${up ? "up" : "down"}">${up ? "▲" : "▼"} ${money(a.old)} → ${money(a.new)}/day</span>`; }
+    if (a.type === "set_targeting") return `<span class="chg">ages ${a.new.age_min} to ${a.new.age_max}</span>`;
+    if (a.type === "pause") return `<span class="chg down">⏸ stop ${money(a.old)}/day</span>`;
+    return a.label ? `<span class="chg">${esc(a.label)}</span>` : ""; };
+  const name = (p) => /^(ad|aud|sync|keyword|review|term):/.test(p.campaign_id) ? esc(p.action.label || niceId(p.campaign_id)) : esc(p.campaign_id.split(":").pop().replace(/-/g, " "));
+  setHTML("props", S.proposals.length ? S.proposals.map((p) => `<div class="pcard${OPEN_P.has(String(p._id)) ? " open" : ""}" data-pid="${esc(p._id)}">
+      <div class="pmain">
+        ${plat(p.platform)}
+        <div class="pwhat"><b>${esc(TITLE[p.action.type] || p.action.type)}: ${name(p)}</b> ${what(p)}
+          <div class="pwhy">${esc(p.reason.text.replace(/ Memory:.*$/, "").split(". ")[0])}.</div></div>
+        <div class="pbtns"><button class="link pmore">Details</button>
+          <button data-decide="reject" data-id="${esc(p._id)}">Reject</button>
+          <button class="ok" data-decide="approve" data-id="${esc(p._id)}">Approve</button></div>
+      </div>
+      <div class="pdetail">
+        <div>${esc(p.reason.text.replace(/ Memory:.*$/, ""))}</div>
+        ${p.reason.memory && p.reason.memory.summary ? `<div class="mem ${p.reason.memory.warning ? "warn" : ""}"><b>${p.reason.memory.warning ? "⚠ Memory changed this decision" : "Memory"}</b>: ${esc(p.reason.memory.summary)}</div>` : ""}
+        ${p.policy_why ? `<div class="muted" style="margin-top:6px">Why a person decides: ${esc(p.policy_why)}</div>` : ""}
+        ${evidenceHTML(p.reason.evidence)}
+        <div class="muted" style="margin-top:8px">Asked by ${esc(p.requested_by)} · <button class="link" data-explain="${esc(p.action_id)}">full history</button>${p.ticket ? ` · <a href="${esc(p.ticket.url)}" target="_blank" rel="noopener">GitHub #${p.ticket.number}</a>` : ""}</div>
+      </div>
+    </div>`).join("") : '<div class="empty">Nothing waiting. 🎉</div>');
 
   setHTML("changes", "<tr><th>Time</th><th>Campaign</th><th>Change</th><th>By</th><th>Result</th><th></th></tr>" +
     (S.changes.map((c) => `<tr><td>${t(c.applied_at)}</td><td>${esc(/^(ad|aud|sync|keyword|review|term):/.test(c.campaign_id) ? (c.action.label || c.campaign_id) : c.campaign_id)}</td>
@@ -753,6 +781,9 @@ async function explain(id) {
   $("dlg").showModal();
 }
 document.addEventListener("click", (ev) => {
+  const pm = ev.target.closest(".pmore");
+  if (pm) { const c = pm.closest(".pcard"); c.classList.toggle("open");
+    const id = c.dataset.pid; if (c.classList.contains("open")) OPEN_P.add(id); else OPEN_P.delete(id); return; }
   const h = ev.target.closest("section.fold > h2");
   if (h) { h.parentElement.classList.toggle("open"); return; }
   const nav = ev.target.closest('#nav a[href^="#sec-"]');
