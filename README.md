@@ -61,6 +61,19 @@ Keyword pauses and review replies use the same gate, approval roles, verificatio
 | Rules in plain English | Staff type a rule such as "never spend more than $150 a day on dental clients" or "always ask before pausing anything on Reddit". It becomes a draft policy with a plain readback of exactly what it will do. Only the agency owner can switch it on or retire it, and every version is stored in `policy_versions`. The parser covers common agency rules; with an LLM key the same draft and approve flow would accept any wording, and the safety comes from a human approving the readback |
 | Time machine | Drag a slider to any past moment and see what the agent knew then: rules in force, kill switch state, budgets then vs now, what was waiting for a human, and the last events. Rebuilt from `policy_versions`, `audit_events`, `change_log` and `proposals` |
 
+## For agencies, marketers and business owners
+
+| Feature | What it does |
+|---|---|
+| Setup wizard | "New client setup": business, industry, monthly budget, platforms and website. Returns a target cost per result, expected results, a budget split, a campaign structure (prospecting, retargeting, brand search), a tracking checklist, and a **live check of the website**. One click creates the client with its goal |
+| Simple view | Hides agency tools (staff switcher, policies, export) for a business owner running their own ads |
+| Goals | Monthly goal per client with progress, projected month end, status, and what it takes to hit the goal |
+| Campaign doctor | Each campaign scored against typical platform ranges: creative, landing page, audience, budget or scale. **Valid data only**: under 100 clicks, under 5 conversions or data older than 6 hours gets no advice; zero results after 3x the target is called out as a loss to stop |
+| Learning from results | Measured outcomes become client memories; the agent's freedom follows its track record. Mostly good results: moves up to 15% alone. Mostly bad: every budget change needs a person. In the demo Bright Smile earned more freedom and Northside lost it |
+| Data quality gate | The agent makes no decision on numbers older than 6 hours and logs the hold |
+| Ad libraries | Real links to the Meta Ad Library, Google Ads Transparency Center, TikTok Creative Center and LinkedIn Ad Library for the client and each competitor |
+| AI search fixes (AEO/GEO) | For each question where AI assistants don't mention the client: a direct answer to add, FAQPage schema, and the sites to get cited on |
+
 ## Tracking and audiences
 
 | Tab | What it does | Agent action |

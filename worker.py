@@ -18,6 +18,7 @@ import gate
 from ops import seed_identity_and_policy
 from platforms import build_platforms, platform_for, utcnow
 import evidence
+import growth
 import memory
 import ops
 from rules import decide, decide_targeting, merged_settings
@@ -78,6 +79,13 @@ def act(db, platform, account, camp, a, s, now, run_id, counts, ev=None):
                        campaign_id=cid, method=recalled["method"], summary=summary, warning=warn,
                        hits=[h["text"] for h in recalled["hits"]])
         extra["memory_warning"] = warn
+    # Learning: autonomy earned (or lost) from measured outcomes for this client.
+    rc = gate.run_cache()
+    tcache = rc.setdefault("trust", {}) if rc is not None else {}
+    if client_id not in tcache:
+        tcache[client_id] = growth.trust(db, client_id)
+    extra["trust"] = tcache[client_id]["level"]
+    reason["trust"] = tcache[client_id]["text"]
 
     # Skip if this exact move was already denied today: no spamming the log.
     if (cid, a.type, a.new if a.type == "set_budget" else None) in gate.run_cache()["denied"]:
@@ -88,6 +96,10 @@ def act(db, platform, account, camp, a, s, now, run_id, counts, ev=None):
     if out["effect"] == "allow":
         counts["applied"] += 1
         print(f"[applied] {cid}: {a.reason} -> {out['result']}")
+    elif out["effect"] == "require_approval" and cid in gate.run_cache()["open"]:
+        gate.audit(db, "proposal_deferred", actor_id=gate.AGENT_ID, action_id=out["action_id"], client_id=client_id,
+                   run_id=run_id, campaign_id=cid, reason="Another change for this campaign is waiting for a person.")
+        print(f"[deferred] {cid}: {a.reason}")
     elif out["effect"] == "require_approval":
         db.proposals.insert_one({
             "action_id": out["action_id"], "client_id": client_id, "account_id": account["_id"],
@@ -205,6 +217,11 @@ def _run_once(db, platforms, now) -> dict:
             cid = stats["campaign_id"]
             if cid not in live_by_id:
                 continue
+            # Valid data only: never act on stale numbers.
+            if stats.get("last_ts") and now - stats["last_ts"] > timedelta(hours=6):
+                gate.audit(db, "data_quality_hold", actor_id=gate.AGENT_ID, run_id=run_id, client_id=client_id,
+                           campaign_id=cid, reason="Data older than 6 hours, no decision made.")
+                continue
             camp = live_by_id[cid]
             stats.update(status=camp["status"], daily_budget=camp["daily_budget"])
             edits_today, last_edit = _edit_history(cid, now)
@@ -212,8 +229,8 @@ def _run_once(db, platforms, now) -> dict:
                              now=now, account_budget_total=budget_total),
                       decide_targeting(stats, s, camp)]
             for a in [w for w in wanted if w]:
-                if cid in gate.run_cache()["open"]:
-                    break
+                # Every wanted action is still checked against policy (so denials are
+                # recorded); act() defers a second proposal while one is open.
                 ev = evidence.build(a, stats, prior.get(cid), account_cpa, s, stats.get("last_ts"))
                 out = act(db, platform, account, camp, a, s, now, run_id, counts, ev)
                 if out and out["effect"] == "allow" and out["result"]["ok"] and a.type == "set_budget":
@@ -241,7 +258,8 @@ def seed(db, platforms, reset=False):
     from demo_data import CLIENTS
     if reset:  # demo only: wipes the demo collections
         db.policies.delete_many({"_id": {"$regex": "^custom-"}})
-        for coll in ("proposals", "change_log", "audit_events", "runs", "controls", "clients", "policy_versions",
+        db.clients.delete_many({})
+        for coll in ("proposals", "change_log", "audit_events", "runs", "controls", "clients", "policy_versions", "goals", "plans",
                      "accounts", "settings", "sandbox_campaigns", "metrics_snapshots"):
             db[coll].delete_many({})
     seed_identity_and_policy(db)
@@ -263,6 +281,7 @@ def seed(db, platforms, reset=False):
     skills.seed(db, now)
     import tracking
     tracking.seed(db, now)
+    growth.seed_goals(db)
     from demo_data import MEMORIES
     if reset:
         db.memories.delete_many({})

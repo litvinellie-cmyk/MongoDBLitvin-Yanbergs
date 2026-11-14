@@ -83,6 +83,14 @@ td.k { font-variant-numeric: tabular-nums; white-space: nowrap; }
 #banner .alert b { display: block; font-size: 15px; margin-bottom: 4px; }
 .mem { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: var(--info-bg); color: var(--ink); font-size: 13px; }
 .mem.warn { background: var(--wait-bg); }
+body.simple .agency-only { display: none !important; }
+.goalbar { height: 12px; background: var(--line); border-radius: 8px; overflow: hidden; margin: 8px 0; }
+.goalbar div { height: 100%; border-radius: 8px; }
+.setupgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.setupgrid label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.setupgrid input, .setupgrid select { font: inherit; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+label.chk { display: flex; gap: 6px; align-items: center; font-size: 14px; color: var(--ink); }
+pre.code { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px; font-size: 12px; overflow-x: auto; }
 #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); max-width: 90vw;
   padding: 10px 16px; border-radius: 10px; font-weight: 500; display: none; z-index: 5; }
 dialog { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--ink);
@@ -101,12 +109,14 @@ code { font-size: 12px; }
     <span id="halt" class="pill"></span>
     <label class="muted" for="client">Client</label>
     <select id="client"></select>
-    <label class="muted" for="actor">Acting as</label>
-    <select id="actor"></select>
+    <label class="muted agency-only" for="actor">Acting as</label>
+    <select id="actor" class="agency-only"></select>
+    <button id="modeBtn" title="Switch between the agency view and a simpler view for one business">Simple view</button>
+    <button id="setupBtn">New client setup</button>
     <button id="run" class="primary">Run agent now</button>
     <button id="haltBtn" class="danger">Halt agent</button>
     <a id="reportLink" class="btnlink" target="_blank">Client report</a>
-    <a id="exportLink" class="btnlink">Export decision log</a>
+    <a id="exportLink" class="btnlink agency-only">Export decision log</a>
     <span id="acc" class="pill on"></span>
     <button id="spikeBtn" title="Demo: one campaign starts spending 4x too fast">Simulate spend spike</button>
   </div>
@@ -114,6 +124,10 @@ code { font-size: 12px; }
 <div id="banner"></div>
 <main>
   <div>
+    <section id="goalSec">
+      <h2>Goal this month</h2>
+      <div id="goalBox"></div>
+    </section>
     <section>
       <h2>Campaigns (last 7 days)</h2>
       <div id="clientCards" class="cards"></div>
@@ -122,6 +136,11 @@ code { font-size: 12px; }
     <section>
       <h2>Waiting for approval</h2>
       <div id="props"></div>
+    </section>
+    <section>
+      <h2>Campaign doctor</h2>
+      <div class="muted" style="margin-bottom:8px">Every campaign checked against typical ranges for its platform. Campaigns without enough reliable data get no advice until they have it.</div>
+      <div id="doctor"></div>
     </section>
     <section>
       <h2>Channels beyond ads</h2>
@@ -173,7 +192,7 @@ code { font-size: 12px; }
       <div class="muted" style="margin:6px 0 10px">Type a rule in plain words. You'll see exactly what it will do before it counts. Only the agency owner can switch it on, and every version is kept.</div>
       <div id="rules"></div>
     </section>
-    <section>
+    <section class="agency-only">
       <h2>Policies in Atlas</h2>
       <div class="scroll"><table id="pols"></table></div>
     </section>
@@ -193,6 +212,22 @@ code { font-size: 12px; }
   </div>
 </main>
 <div id="toast"></div>
+<dialog id="setupDlg"><div class="head"><b>New client setup</b><button id="setupClose">Close</button></div><div class="body">
+  <div class="setupgrid">
+    <label>Business name<input id="suName" placeholder="Maple Bakery"></label>
+    <label>Industry<select id="suInd"><option>Ecommerce</option><option>Medical</option><option>Real estate</option><option>Local service</option><option>Other</option></select></label>
+    <label>Monthly ad budget ($)<input id="suBudget" type="number" min="100" value="3000"></label>
+    <label>Target cost per result ($, optional)<input id="suTarget" type="number" min="1" placeholder="we'll suggest one"></label>
+    <label>Website (optional, checked live)<input id="suSite" placeholder="example.com"></label>
+    <div><div class="muted" style="margin-bottom:4px">Platforms</div>
+      <label class="chk"><input type="checkbox" value="meta" checked> Facebook + Instagram</label>
+      <label class="chk"><input type="checkbox" value="google" checked> Google</label>
+      <label class="chk"><input type="checkbox" value="tiktok"> TikTok</label>
+      <label class="chk"><input type="checkbox" value="reddit"> Reddit</label></div>
+  </div>
+  <div style="margin-top:12px"><button id="suPlan" class="primary">Build my plan</button></div>
+  <div id="suOut" style="margin-top:14px"></div>
+</div></dialog>
 <dialog id="dlg"><div class="head"><b id="dlgTitle">Explain</b><button id="dlgClose">Close</button></div><div class="body" id="dlgBody"></div></dialog>
 
 <script>
@@ -220,7 +255,7 @@ async function post(path, body) {
   const j = await r.json();
   if (j.ok === false) toast(j.error || "Denied", false);
   else toast(j.status ? "Done: " + j.status : "Done", true);
-  CH_FOR = null; SK_FOR = null; TR_FOR = null;
+  CH_FOR = null; SK_FOR = null; TR_FOR = null; G_FOR = null;
   await load();
   return j;
 }
@@ -376,10 +411,14 @@ function renderChannels() {
       ${a.wrong_info.map((w) => `<div class="mem warn"><b>Wrong information in ${esc(w.engine)}</b> for "${esc(w.query)}": ${esc(w.issue)}. Fix the Google Business Profile and website hours so AI picks up the correct info.</div>`).join("")}
       <div class="scroll"><table><tr><th>Question people ask AI</th>${["ChatGPT", "Perplexity", "Gemini", "Google AI Overview", "Claude"].map((e) => `<th>${e}</th>`).join("")}</tr>
       ${a.queries.map((q) => `<tr><td>${esc(q)}</td>${["ChatGPT", "Perplexity", "Gemini", "Google AI Overview", "Claude"].map((e) => { const g = a.grid.find((x) => x.query === q && x.engine === e); return `<td>${g && g.mentioned ? `<span class="yes">#${g.position}</span>` : '<span class="no">not mentioned</span>'}</td>`; }).join("")}</tr>`).join("")}</table></div>
+      ${G && G.aeo && G.aeo.length ? `<h3 style="margin:14px 0 6px;font-size:15px">How to get mentioned (${G.aeo.length} questions to fix)</h3>` + G.aeo.map((f) => `<div class="card"><b>"${esc(f.question)}"</b> <span class="muted">missing on ${esc(f.missing_on.join(", "))}</span>
+        <ol style="margin:6px 0 6px 18px;padding:0">${f.steps.map((x) => `<li>${esc(x)}</li>`).join("")}</ol>
+        <details><summary class="muted" style="cursor:pointer">FAQ schema to add to the page</summary><pre class="code">${esc(f.schema)}</pre></details></div>`).join("") : ""}
       <div class="muted" style="margin-top:8px">Sites AI cites most for these questions: ${a.top_sources.map(([s, n]) => esc(s) + " (" + n + ")").join(", ")}. Getting mentioned there raises AI visibility.</div>`;
   } else if (TAB === "comp") {
     const c = CH.competitors;
     h = `<div class="mem">${esc(c.summary)}</div>
+      ${G && G.libraries ? `<div class="card"><b>Check real ads live</b><div class="muted" style="margin-bottom:6px">Open each public ad library to see current ads for the client and its competitors.</div>${G.libraries.map((l) => `<div style="margin:4px 0"><b>${esc(l.name)}:</b> ${l.links.map((x) => `<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.label)}</a>`).join(" · ")}</div>`).join("")}</div>` : ""}
       ${c.brand_bidder ? `<div class="mem warn"><b>Brand defense:</b> ${esc(c.brand_bidder)} shows ads when people search your client's name. Consider a small branded search campaign.</div>` : ""}
       <div class="scroll"><table><tr><th>Competitor</th><th>Ad</th><th>Type</th><th>Platform</th><th>Running</th></tr>
       ${c.ads.map((x) => `<tr><td>${esc(x.competitor)}</td><td>${esc(x.text)}</td><td>${esc(x.kind)}</td><td>${plat(x.platform)}</td>
@@ -403,6 +442,35 @@ function renderChannels() {
       <span class="badge st-${esc(t.status)}">${esc(t.status.toUpperCase())}</span></div>${t.checks.map((c) => `<div>${esc(c)}</div>`).join("")}</div>`).join("");
   }
   setHTML("chBody", h);
+}
+let G = null, G_FOR = null, SIMPLE = false;
+try { SIMPLE = localStorage.getItem("simple") === "1"; } catch (e) {}
+async function loadGrowth(force) {
+  if (force || G_FOR !== CLIENT || !G) { G = await (await fetch("/api/growth?client=" + encodeURIComponent(CLIENT))).json(); G_FOR = CLIENT; }
+  renderGrowth();
+}
+function goalHTML(g, name) {
+  if (!g) return '<div class="empty">No goal set.</div>';
+  const col = g.status === "on track" ? "var(--allow)" : g.status === "close" ? "var(--wait)" : "var(--deny)";
+  return `<div class="row"><b>${name ? esc(name) + ": " : ""}${g.month_to_date} of ${g.target} ${esc(g.metric)}</b><span class="badge ${g.status === "on track" ? "allow" : g.status === "close" ? "pending" : g.status === "not started" ? "info" : "deny"}">${esc(g.status.toUpperCase())}</span></div>
+    <div class="goalbar"><div style="width:${Math.min(100, g.month_to_date / g.target * 100)}%;background:${col}"></div></div>
+    <div class="muted">Day ${g.day} of ${g.days_in_month}. On pace for about ${g.projected} (${g.pct}% of goal). Spent ${money(g.spend_mtd)} so far.</div>
+    ${g.plan ? `<div class="mem warn" style="margin-top:6px">${esc(g.plan)}</div>` : ""}`;
+}
+function renderGrowth() {
+  if (!G) return;
+  if (G.needs_client) {
+    setHTML("goalBox", S && S.clients ? S.clients.map((c) => `<div style="margin-bottom:12px">${goalHTML(G.goals[c._id], c.name)}</div>`).join("") : "");
+    setHTML("doctor", '<div class="empty">Pick one client to see the campaign doctor.</div>');
+    return;
+  }
+  setHTML("goalBox", goalHTML(G.goal) + `<div class="mem" style="margin-top:8px"><b>What the agent has learned:</b> ${esc(G.trust.text)}</div>`
+    + `<div class="row" style="justify-content:flex-start;gap:8px;margin-top:8px"><input id="goalSet" type="number" min="1" placeholder="New monthly goal" style="font:inherit;width:160px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink)"><button id="goalSetBtn">Set goal</button></div>`);
+  setHTML("doctor", G.analyze.map((a) => `<div class="card"><div class="row"><b>${plat(a.platform)} ${esc(a.campaign)}</b>
+      ${a.score == null ? '<span class="badge pending">NOT ENOUGH VALID DATA</span>' : `<span class="badge ${a.score >= 80 ? "allow" : a.score >= 60 ? "pending" : "deny"}">HEALTH ${a.score}/100</span>`}</div>
+      ${a.score == null ? a.quality.reasons.map((x) => `<div class="muted">${esc(x)}</div>`).join("") + '<div class="muted">No performance advice until the data is reliable.</div>'
+        : a.tips.map((t) => `<div><span class="tag">${esc(t.area)}</span> ${esc(t.text)}</div>`).join("") + (a.quality.reasons.length ? a.quality.reasons.map((x) => `<div class="muted">Data note: ${esc(x)}</div>`).join("") : "")}
+    </div>`).join("") + '<div class="muted">Typical ranges are approximate industry figures, for orientation.</div>');
 }
 let TRT = "utm", TR = null, TR_FOR = null;
 async function loadTracking(force) {
@@ -517,6 +585,30 @@ function renderRules() {
       <div style="margin-top:8px;text-align:right">${p.status === "draft" ? `<button class="ok" data-rule="${esc(p._id)}" data-act="1">Switch on</button>` : p.status === "active" ? `<button data-rule="${esc(p._id)}" data-act="0">Retire</button>` : ""}</div></div>`).join("")
     : '<div class="empty">No agency rules yet. Try one above.</div>');
 }
+function applyMode() {
+  document.body.classList.toggle("simple", SIMPLE);
+  $("modeBtn").textContent = SIMPLE ? "Agency view" : "Simple view";
+  if (SIMPLE) $("actor").value = "user:ellie";
+}
+async function buildPlan() {
+  const platforms = [...document.querySelectorAll('#setupDlg input[type=checkbox]:checked')].map((x) => x.value);
+  $("suOut").innerHTML = '<div class="muted">Building the plan' + ($("suSite").value ? " and checking the website live" : "") + '...</div>';
+  const j = await (await fetch("/api/setup/plan", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({
+    actor: $("actor").value, name: $("suName").value, industry: $("suInd").value, budget: $("suBudget").value,
+    target: $("suTarget").value, website: $("suSite").value, platforms})})).json();
+  const p = j.plan; window.__plan = p;
+  const sa = p.site_audit;
+  $("suOut").innerHTML = `${p.warning ? `<div class="mem warn">${esc(p.warning)}</div>` : ""}
+    <div class="row" style="justify-content:flex-start;gap:24px;flex-wrap:wrap;margin:8px 0">
+      <span class="kpi"><b>${money(p.target_cpa)}</b>target per ${esc(p.result_word)}</span>
+      <span class="kpi"><b>${p.expected_results[0]} to ${p.expected_results[1]}</b>${esc(p.result_word)}s a month expected</span></div>
+    <div class="muted">${esc(p.note)}</div>
+    <h3 style="font-size:15px;margin:12px 0 6px">Budget split</h3><table><tr><th>Platform</th><th>Share</th><th>Per day</th></tr>${p.split.map((x) => `<tr><td>${plat(x.platform, x.label)}</td><td>${x.pct}%</td><td>${money(x.per_day)}</td></tr>`).join("")}</table>
+    <h3 style="font-size:15px;margin:12px 0 6px">Campaign structure</h3>${p.structure.map((x) => `<div><b>${esc(x.name)} (${x.share}%):</b> ${esc(x.what)}</div>`).join("")}
+    <h3 style="font-size:15px;margin:12px 0 6px">Setup checklist</h3><ol style="margin:0 0 0 18px;padding:0">${p.checklist.map((x) => `<li>${esc(x)}</li>`).join("")}</ol>
+    ${sa ? (sa.ok ? `<h3 style="font-size:15px;margin:12px 0 6px">Website check (live): ${sa.score}/100</h3>${sa.checks.filter((c) => !c.ok).map((c) => `<div><span class="badge deny">FIX</span> ${esc(c.check)}: <span class="muted">${esc(c.detail)}</span></div>`).join("") || '<div class="muted">All checks passed.</div>'}` : `<div class="mem warn">Website check: ${esc(sa.error)}</div>`) : ""}
+    <div style="margin-top:14px;text-align:right"><button id="suCreate" class="ok">Create client with this plan</button></div>`;
+}
 async function load() {
   const r = await fetch("/api/state?client=" + encodeURIComponent(CLIENT));
   S = await r.json();
@@ -524,6 +616,7 @@ async function load() {
   loadChannels(false);
   loadSkills(false);
   loadTracking(false);
+  loadGrowth(false).then(() => renderChannels());
   renderRules();
   if (!TM_T) { TMB = null; loadTM(); }
 }
@@ -554,6 +647,16 @@ document.addEventListener("click", async (ev) => {
     return;
   }
   if (ev.target.id === "tmNow") { TM_T = null; $("tmSlider").value = 1000; TMB = null; return loadTM(); }
+  if (ev.target.id === "goalSetBtn") { const v = $("goalSet").value; return post("/api/goal/set", {client: CLIENT, target: v}); }
+  if (ev.target.id === "modeBtn") { SIMPLE = !SIMPLE; try { localStorage.setItem("simple", SIMPLE ? "1" : "0"); } catch (e) {} return applyMode(); }
+  if (ev.target.id === "setupBtn") { $("suOut").innerHTML = ""; return $("setupDlg").showModal(); }
+  if (ev.target.id === "setupClose") return $("setupDlg").close();
+  if (ev.target.id === "suPlan") return buildPlan();
+  if (ev.target.id === "suCreate") {
+    const j = await post("/api/setup/create", {plan: window.__plan});
+    if (j.ok) { $("setupDlg").close(); CLIENT = j.client_id; try { localStorage.setItem("client", CLIENT); } catch (e) {} load(); }
+    return;
+  }
   const trb = ev.target.closest("#trTabs button");
   if (trb) { TRT = trb.dataset.tr; return renderTracking(); }
   const sb = ev.target.closest("#skTabs button");
@@ -584,7 +687,7 @@ document.addEventListener("click", async (ev) => {
 });
 $("run").onclick = async () => {
   const r = await fetch("/api/run", {method: "POST", body: "{}"}); const j = await r.json();
-  CH_FOR = null; SK_FOR = null; TR_FOR = null;
+  CH_FOR = null; SK_FOR = null; TR_FOR = null; G_FOR = null;
   toast(j.halted ? "Agent is halted. Nothing ran." : `Run ${j.run_id}: ${j.applied} applied, ${j.proposed} proposed, ${j.denied} denied${j.breaker_trips ? ", circuit breaker tripped" : ""}`, !j.halted);
   load();
 };
@@ -604,6 +707,7 @@ $("haltBtn").onclick = () => {
 };
 $("tmSlider").oninput = () => { if (!TMB) return; TM_T = tmFromSlider(); $("tmTime").textContent = TM_T.toLocaleString();
   clearTimeout(TM_TIMER); TM_TIMER = setTimeout(loadTM, 250); };
+applyMode();
 $("client").onchange = () => { CLIENT = $("client").value; try { localStorage.setItem("client", CLIENT); } catch (e) {} load(); };
 $("actor").onchange = () => { try { localStorage.setItem("actor", $("actor").value); } catch (e) {} };
 $("dlgClose").onclick = () => $("dlg").close();

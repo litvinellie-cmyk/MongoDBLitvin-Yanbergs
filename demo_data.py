@@ -89,4 +89,11 @@ MEMORIES = [
     _m("brightsmile", "meta", "set_budget", "increase", 10, 0.60, "better", 37.0, 35.5, 15),
     _m("northside", "meta", "set_budget", "increase", 10, 0.65, "better", 58.0, 54.0, 18),
     _m("northside", "meta", "pause", "pause", 100, None, "better", None, None, 30),
+    # Learning demo: Bright Smile's past moves mostly worked (agent earns more freedom),
+    # Northside's mostly didn't (agent must ask before every budget change).
+    _m("brightsmile", "google", "set_budget", "decrease", 15, 1.50, "better", 98.0, 77.0, 40),
+    _m("brightsmile", "meta", "set_budget", "increase", 10, 0.55, "better", 34.0, 33.1, 28),
+    _m("northside", "google", "set_budget", "increase", 10, 0.80, "worse", 88.0, 104.0, 21),
+    _m("northside", "meta", "set_budget", "increase", 15, 0.70, "worse", 61.0, 79.0, 14),
+    _m("northside", "google", "set_budget", "decrease", 10, 1.20, "worse", 101.0, 112.0, 7),
 ]

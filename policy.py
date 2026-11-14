@@ -26,9 +26,15 @@ DEFAULT_POLICIES = [
     {"_id": "health-targeting-review", "priority": 30, "roles": ["agent"], "actions": ["set_targeting"],
      "when": {"industry": "Medical"}, "effect": "require_approval",
      "why": "Health ads need a human compliance review before any targeting change."},
+    {"_id": "earned-autonomy-low", "priority": 84, "roles": ["agent"], "actions": ["set_budget"],
+     "when": {"trust": "low"}, "effect": "require_approval",
+     "why": "Most of the agent's recent moves for this client didn't help, so every budget change needs a person until results improve."},
     {"_id": "memory-says-be-careful", "priority": 85, "roles": ["agent"], "actions": ["set_budget"],
      "when": {"memory_warning": True}, "effect": "require_approval",
      "why": "Similar past moves for this client made results worse, so a human decides this time."},
+    {"_id": "earned-autonomy-high", "priority": 94, "roles": ["agent"], "actions": ["set_budget"],
+     "when": {"trust": "high", "change_pct_lte": 15}, "effect": "allow",
+     "why": "The agent's recent moves for this client mostly helped, so it has earned moves up to 15% on its own."},
     {"_id": "reddit-agent-asks-first", "priority": 90, "roles": ["agent"], "actions": ["set_budget"],
      "when": {"platform": "reddit"}, "effect": "require_approval",
      "why": "Reddit is a new channel for these clients, so every agent move there needs a human."},
@@ -103,7 +109,7 @@ def _when_holds(when: dict, ctx: dict) -> bool:
         elif key == "campaign_tag":
             if val not in (ctx.get("campaign_tags") or []):
                 return False
-        elif key in ("account_id", "client_id", "platform", "industry", "memory_warning"):
+        elif key in ("account_id", "client_id", "platform", "industry", "memory_warning", "trust"):
             if ctx.get(key) != val:
                 return False
         else:

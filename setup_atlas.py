@@ -74,7 +74,7 @@ VALIDATED = {
         "properties": {"event": {"bsonType": "string"}, "at": {"bsonType": "date"}},
     },
 }
-PLAIN = ["clients", "policy_versions", "memories", "competitor_ads", "ai_visibility", "seo_keywords", "reviews",
+PLAIN = ["clients", "goals", "plans", "policy_versions", "memories", "competitor_ads", "ai_visibility", "seo_keywords", "reviews",
          "creatives", "products", "search_terms", "experiments", "ads", "capi_health", "audiences",
          "audience_syncs", "leads", "brand_docs", "sandbox_campaigns", "controls", "runs"]
 

@@ -19,6 +19,7 @@ import memory
 import ops
 import nl_rules
 import report
+import growth
 import timemachine
 import tracking
 from datetime import datetime
@@ -200,6 +201,18 @@ class Handler(BaseHTTPRequestHandler):
             q = parse_qs(u.query)
             t = datetime.fromisoformat(q.get("t", [""])[0].replace("Z", "+00:00"))
             return self._send(200, timemachine.state_at(DB, q.get("client", ["all"])[0], t))
+        if u.path == "/api/growth":
+            cid = parse_qs(u.query).get("client", ["all"])[0]
+            if cid == "all":
+                return self._send(200, {"needs_client": True, "goals": {c["_id"]: growth.goal_status(DB, c["_id"])
+                                                                        for c in DB.clients.find()}})
+            comps = sorted({a["competitor"] for a in DB.competitor_ads.find({"client_id": cid}, {"competitor": 1})})
+            client = DB.clients.find_one({"_id": cid}) or {}
+            return self._send(200, {"analyze": growth.analyze(DB, cid), "goal": growth.goal_status(DB, cid),
+                                    "trust": growth.trust(DB, cid), "aeo": growth.aeo_fixes(DB, cid),
+                                    "libraries": [{"name": n, "links": growth.ad_library_links(n)}
+                                                  for n in [client.get("name", cid)] + comps],
+                                    "plan": DB.plans.find_one({"client_id": cid}, {"_id": 0})})
         if u.path == "/api/tracking":
             cid = parse_qs(u.query).get("client", ["all"])[0]
             if cid == "all":
@@ -239,6 +252,17 @@ class Handler(BaseHTTPRequestHandler):
                 out = nl_rules.draft(DB, body.get("text", ""), actor)
             elif p == "/api/rules/decide":
                 out = nl_rules.decide(DB, body["id"], actor, bool(body.get("activate")))
+            elif p == "/api/setup/plan":
+                plan = growth.setup_plan(body.get("name", "").strip() or "New business", body.get("industry", "Other"),
+                                         float(body.get("budget") or 0), body.get("platforms") or [],
+                                         body.get("website", ""), float(body["target"]) if body.get("target") else None)
+                if body.get("website"):
+                    plan["site_audit"] = skills.prospect_audit(body["website"])
+                out = {"ok": True, "plan": plan}
+            elif p == "/api/setup/create":
+                out = growth.create_from_plan(DB, body["plan"], actor)
+            elif p == "/api/goal/set":
+                out = growth.set_goal(DB, body["client"], int(body.get("target") or 0), actor)
             elif p == "/api/spike":
                 out = spike(body.get("client"))
             elif p == "/api/forget":
