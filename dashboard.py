@@ -335,4 +335,4 @@ if __name__ == "__main__":
     threading.Thread(target=_github_poller, daemon=True).start()
     port = int(os.environ.get("PORT", "8000"))
     print(f"dashboard on http://localhost:{port}")
-    ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()
+    ThreadingHTTPServer((os.environ.get("HOST", "127.0.0.1"), port), Handler).serve_forever()
