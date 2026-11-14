@@ -291,13 +291,12 @@ def run(db, platforms, run_id: str, counts: dict) -> None:
         cid = client["_id"]
         acc = db.accounts.find_one({"client_id": cid, "platform": "google"}) or \
             db.accounts.find_one({"client_id": cid, "platform": {"$ne": "shopify"}})
-        if not acc or gate.halt_state(db, acc["_id"], cid):
+        if not acc or gate.halt_state_cached(db, acc["_id"], cid):
             continue
         plat = platform_for(platforms, acc)
         for k in db.seo_keywords.find({"client_id": cid, "status": "ACTIVE", "organic_rank": {"$lte": 2}}):
             target = f"keyword:{k['_id']}"
-            if db.proposals.find_one({"campaign_id": target, "status": {"$in": ["pending", "approved", "executing"]}}) \
-                    or db.audit_events.find_one({"campaign_id": target, "event": "policy_check", "actor_id": gate.AGENT_ID}):
+            if _seen(db, target):
                 continue
             save = round(k["paid_spend_7d"] * 0.7, 2)
             reason = {"text": (f"You rank #{k['organic_rank']} organically for \"{k['keyword']}\" and still paid "
@@ -309,8 +308,7 @@ def run(db, platforms, run_id: str, counts: dict) -> None:
                                              "new": "PAUSED", "label": k["keyword"]}, reason, run_id, counts)
         for r in db.reviews.find({"client_id": cid, "reply": None}):
             target = f"review:{r['_id']}"
-            if db.proposals.find_one({"campaign_id": target, "status": {"$in": ["pending", "approved", "executing"]}}) \
-                    or db.audit_events.find_one({"campaign_id": target, "event": "policy_check", "actor_id": gate.AGENT_ID}):
+            if _seen(db, target):
                 continue
             text = draft_reply(r, client["name"])
             urgent = r["stars"] <= 2
@@ -320,6 +318,15 @@ def run(db, platforms, run_id: str, counts: dict) -> None:
             _propose(db, plat, acc, target, {"type": "reply_review", "field": "reply", "old": None, "new": text,
                                              "label": f"{r['stars']} star review from {r['author']}"},
                      reason, run_id, counts)
+
+
+def _seen(db, target) -> bool:
+    """Already proposed or already decided by policy: don't ask twice."""
+    rc = gate.run_cache()
+    if rc is not None:
+        return target in rc["open"] or any(c[0] == target for c in rc["checked"])
+    return bool(db.proposals.find_one({"campaign_id": target, "status": {"$in": ["pending", "approved", "executing"]}})
+                or db.audit_events.find_one({"campaign_id": target, "event": "policy_check", "actor_id": gate.AGENT_ID}))
 
 
 def _propose(db, plat, acc, target, action, reason, run_id, counts):
@@ -333,6 +340,8 @@ def _propose(db, plat, acc, target, action, reason, run_id, counts):
             "reason": reason, "requested_by": gate.AGENT_ID, "policy_id": out["policy_id"],
             "policy_why": out["why"], "run_id": run_id, "status": "pending", "created_at": now,
             "expires_at": now + timedelta(hours=48)})
+        if gate.run_cache() is not None:
+            gate.run_cache()["open"].add(target)
         gate.audit(db, "proposal_created", actor_id=gate.AGENT_ID, action_id=out["action_id"],
                    client_id=acc["client_id"], run_id=run_id, campaign_id=target, policy_id=out["policy_id"])
         counts["proposed"] += 1

@@ -1,5 +1,7 @@
 # Budget Agent You Can Audit
 
+Pitch page: open `pitch.html` in a browser.
+
 An AI ad budget agent for agencies, with MongoDB Atlas as its identity, policy and audit layer.
 
 Track 1, Agents You Can Audit. Agents in Context Toronto, MongoDB hackathon, Nov 14 2026.
@@ -127,6 +129,10 @@ python3 -m venv .venv
 ```
 
 `setup_atlas.py` creates the collections and indexes (`schemas.js` does the same if you have `mongosh`). `reset-demo` loads actors, policies, 5 sandbox campaigns and 7 days of history; run it before each demo for a clean start. The dashboard opens at http://localhost:8000.
+
+## Speed
+
+A full agent run (3 clients, 8 accounts, all channels and skills) takes about 15 seconds against a remote Atlas cluster, down from 51. Rules and people are cached for a few seconds, per-run lookups are loaded once, and audit events are written in bulk. Audit events are always flushed to Atlas before anything is sent to an ad platform, and the kill switch is re-read live right before every write.
 
 ## Tests
 

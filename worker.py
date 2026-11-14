@@ -21,7 +21,7 @@ import evidence
 import memory
 import ops
 from rules import decide, decide_targeting, merged_settings
-from store import campaign_stats, day_str, edit_history, get_db, has_open_proposal, measure_outcomes
+from store import campaign_stats, day_str, get_db, measure_outcomes
 
 
 BREAKER_ID = "agent:circuit-breaker"
@@ -80,9 +80,7 @@ def act(db, platform, account, camp, a, s, now, run_id, counts, ev=None):
         extra["memory_warning"] = warn
 
     # Skip if this exact move was already denied today: no spamming the log.
-    if db.audit_events.find_one({"event": "policy_check", "campaign_id": cid, "effect": "deny",
-                                 "action_type": a.type, "context.new_budget": a.new if a.type == "set_budget" else None,
-                                 "at": {"$gte": now - timedelta(hours=24)}, "actor_id": gate.AGENT_ID}):
+    if (cid, a.type, a.new if a.type == "set_budget" else None) in gate.run_cache()["denied"]:
         return None
 
     out = gate.attempt(db, platform, account, camp, a.as_doc(), reason,
@@ -99,6 +97,7 @@ def act(db, platform, account, camp, a, s, now, run_id, counts, ev=None):
             "run_id": run_id, "status": "pending", "created_at": now,
             "expires_at": now + timedelta(hours=s["proposal_ttl_hours"]),
         })
+        gate.run_cache()["open"].add(cid)
         gate.audit(db, "proposal_created", actor_id=gate.AGENT_ID, action_id=out["action_id"],
                    client_id=client_id, run_id=run_id, campaign_id=cid, policy_id=out["policy_id"])
         counts["proposed"] += 1
@@ -109,8 +108,41 @@ def act(db, platform, account, camp, a, s, now, run_id, counts, ev=None):
     return out
 
 
+def _preload(db, now) -> dict:
+    """One query each instead of one per campaign: Atlas round trips dominate run time."""
+    open_ids = {p["campaign_id"] for p in db.proposals.find(
+        {"status": {"$in": ["pending", "approved", "executing"]}}, {"campaign_id": 1})}
+    denied, checked = set(), set()
+    for e in db.audit_events.find({"event": "policy_check", "actor_id": gate.AGENT_ID},
+                                  {"campaign_id": 1, "action_type": 1, "effect": 1, "at": 1,
+                                   "context.new_budget": 1, "context.reason_kind": 1}):
+        checked.add((e.get("campaign_id"), e.get("action_type"), (e.get("context") or {}).get("reason_kind")))
+        if e.get("effect") == "deny" and e["at"] >= now - timedelta(hours=24):
+            denied.add((e.get("campaign_id"), e.get("action_type"), (e.get("context") or {}).get("new_budget")))
+    edits = {}
+    for c in db.change_log.find({"result.ok": True, "applied_at": {"$gte": now - timedelta(days=2)}},
+                                {"campaign_id": 1, "applied_at": 1}):
+        edits.setdefault(c["campaign_id"], []).append(c["applied_at"])
+    return {"open": open_ids, "denied": denied, "checked": checked, "edits": edits}
+
+
+def _edit_history(cid, now):
+    times = gate.run_cache()["edits"].get(cid, [])
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    return sum(t >= start for t in times), (max(times) if times else None)
+
+
 def run_once(db, platforms, now=None) -> dict:
     now = now or utcnow()
+    with gate.batch(db):
+        gate.set_run_cache(_preload(db, now))
+        try:
+            return _run_once(db, platforms, now)
+        finally:
+            gate.set_run_cache(None)
+
+
+def _run_once(db, platforms, now) -> dict:
     run_id = "run_" + uuid.uuid4().hex[:8]
     counts = {"run_id": run_id, "snapshots": 0, "applied": 0, "proposed": 0, "denied": 0,
               "expired": 0, "outcomes": 0, "halted": False}
@@ -151,7 +183,7 @@ def run_once(db, platforms, now=None) -> dict:
         budget_total = sum(c["daily_budget"] for c in live if c["status"] == "ACTIVE")
 
         # Circuit breaker: spend running far ahead of today's pace halts the client.
-        if live and not gate.halt_state(db, account["_id"], client_id):
+        if live and not gate.halt_state_cached(db, account["_id"], client_id):
             tripped = check_pace(db, account, live, budget_total, s, now, run_id)
             if tripped:
                 counts["breaker_trips"] = counts.get("breaker_trips", 0) + 1
@@ -165,8 +197,9 @@ def run_once(db, platforms, now=None) -> dict:
         tot_conv = sum(r["conversions"] for r in current)
         account_cpa = round(tot_spend / tot_conv, 2) if tot_conv else None
         for stats in current:
-            # Kill switch is checked between every step, not only at the start.
-            if gate.halt_state(db, account["_id"], client_id):
+            # Kill switch is checked between every step, not only at the start
+            # (snapshot at most 1 second old; perform() re-reads it live before any write).
+            if gate.halt_state_cached(db, account["_id"], client_id):
                 counts["halted_accounts"] = counts.get("halted_accounts", 0) + 1
                 break
             cid = stats["campaign_id"]
@@ -174,18 +207,18 @@ def run_once(db, platforms, now=None) -> dict:
                 continue
             camp = live_by_id[cid]
             stats.update(status=camp["status"], daily_budget=camp["daily_budget"])
-            edits_today, last_edit = edit_history(db, cid, now)
+            edits_today, last_edit = _edit_history(cid, now)
             wanted = [decide(stats, s, edits_today=edits_today, last_edit_at=last_edit,
                              now=now, account_budget_total=budget_total),
                       decide_targeting(stats, s, camp)]
             for a in [w for w in wanted if w]:
-                if has_open_proposal(db, cid):
+                if cid in gate.run_cache()["open"]:
                     break
                 ev = evidence.build(a, stats, prior.get(cid), account_cpa, s, stats.get("last_ts"))
                 out = act(db, platform, account, camp, a, s, now, run_id, counts, ev)
                 if out and out["effect"] == "allow" and out["result"]["ok"] and a.type == "set_budget":
                     budget_total += a.new - a.old
-        if gate.halt_state(db, None):  # global stop: no more accounts
+        if gate.halt_state_cached(db, None):  # global stop: no more accounts
             counts["halted"] = True
             break
 

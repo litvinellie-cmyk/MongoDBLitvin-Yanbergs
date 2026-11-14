@@ -7,7 +7,10 @@ Nothing in this app calls a platform's write methods except `perform` below.
 
 from __future__ import annotations
 
+import threading
+import time
 import uuid
+from contextlib import contextmanager
 
 from platforms import utcnow
 from policy import action_context, evaluate, roles_for
@@ -20,9 +23,63 @@ def new_action_id() -> str:
     return uuid.uuid4().hex[:12]
 
 
+_local = threading.local()
+_cache: dict = {}
+CACHE_SECONDS = 5.0
+
+
+def _cached(key, loader, ttl=CACHE_SECONDS):
+    hit = _cache.get(key)
+    if hit and time.monotonic() - hit[0] < ttl:
+        return hit[1]
+    val = loader()
+    _cache[key] = (time.monotonic(), val)
+    return val
+
+
+def invalidate() -> None:
+    """Call after policies, actors or the kill switch change."""
+    _cache.clear()
+
+
+@contextmanager
+def batch(db):
+    """Buffer audit events during an agent run and write them in bulk.
+    perform() flushes before touching any platform, so the record of a
+    decision is always in Atlas before the action happens."""
+    prev = getattr(_local, "buf", None)
+    _local.buf = []
+    try:
+        yield
+    finally:
+        flush(db)
+        _local.buf = prev
+
+
+def run_cache() -> dict | None:
+    """Per run lookups loaded once (open proposals, recent denials, edits)."""
+    return getattr(_local, "rc", None)
+
+
+def set_run_cache(rc) -> None:
+    _local.rc = rc
+
+
+def flush(db) -> None:
+    buf = getattr(_local, "buf", None)
+    if buf:
+        db.audit_events.insert_many(buf, ordered=True)
+        buf.clear()
+
+
 def audit(db, event: str, **fields) -> None:
     """Insert only. The audit trail is never updated or deleted by the app."""
-    db.audit_events.insert_one({"event": event, "at": utcnow(), **fields})
+    doc = {"event": event, "at": utcnow(), **fields}
+    buf = getattr(_local, "buf", None)
+    if buf is not None:
+        buf.append(doc)
+    else:
+        db.audit_events.insert_one(doc)
 
 
 def halt_state(db, account_id: str | None, client_id: str | None = None) -> dict | None:
@@ -32,18 +89,27 @@ def halt_state(db, account_id: str | None, client_id: str | None = None) -> dict
 
 
 def get_actor(db, actor_id: str) -> dict | None:
-    return db.actors.find_one({"_id": actor_id, "active": True})
+    actors = _cached(("actors", id(db)), lambda: {a["_id"]: a for a in db.actors.find({"active": True})})
+    return actors.get(actor_id)
 
 
 def policies(db) -> list[dict]:
-    return list(db.policies.find({"active": {"$ne": False}}))
+    return _cached(("policies", id(db)), lambda: list(db.policies.find({"active": {"$ne": False}})))
+
+
+def halt_state_cached(db, account_id, client_id=None):
+    """Kill switch snapshot for decisions (1 second old at most). perform()
+    always re-reads it live right before a write."""
+    halted = _cached(("controls", id(db)), lambda: list(db.controls.find({"halted": True})), ttl=1.0)
+    ids = {"global", f"client:{client_id}" if client_id else None, account_id}
+    return next((c for c in halted if c["_id"] in ids), None)
 
 
 def check(db, actor_id: str, ctx: dict, *, action_id: str | None = None,
           run_id: str | None = None, on_behalf_of: str | None = None) -> tuple[str, str, str]:
     """Identity + kill switch + policy. Always writes a policy_check audit event."""
     actor = get_actor(db, actor_id)
-    stop = (halt_state(db, ctx.get("account_id"), ctx.get("client_id"))
+    stop = (halt_state_cached(db, ctx.get("account_id"), ctx.get("client_id"))
             if ctx["action_type"] not in ("halt", "unhalt") else None)
     roles = roles_for(actor, ctx.get("client_id")) if actor else []
     if not actor:
@@ -89,14 +155,17 @@ def perform(db, platform, account, campaign_id, action, reason, *, actor_id, act
     # Last look at the kill switch right before the write: this is what
     # makes "stop mid run" real.
     cid = account.get("client_id")
+    flush(db)  # every decision so far is in Atlas before we touch the platform
     stop = halt_state(db, account["_id"], cid)
     if stop:
         audit(db, "action_blocked", actor_id=actor_id, action_id=action_id, run_id=run_id, client_id=cid,
               campaign_id=campaign_id, reason="kill switch engaged before send")
         return {"ok": False, "error": "halted"}
 
-    audit(db, "action_sent", actor_id=actor_id, action_id=action_id, run_id=run_id, client_id=cid,
-          account_id=account["_id"], campaign_id=campaign_id, action=action, mode=mode)
+    db.audit_events.insert_one({"event": "action_sent", "at": utcnow(), "actor_id": actor_id,
+                                "action_id": action_id, "run_id": run_id, "client_id": cid,
+                                "account_id": account["_id"], "campaign_id": campaign_id,
+                                "action": action, "mode": mode})
     try:
         t = action["type"]
         if t == "set_budget":

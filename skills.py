@@ -310,7 +310,7 @@ def prospect_audit(url: str) -> dict:
 # ---------------------------------------------------------------- actions through the gate
 
 def run(db, platforms, run_id: str, counts: dict) -> None:
-    from channels import _propose
+    from channels import _propose, _seen
     from platforms import platform_for
     # 2. inventory: pause ads for products that are out of stock
     for prod in db.products.find({"stock": 0}):
@@ -318,10 +318,9 @@ def run(db, platforms, run_id: str, counts: dict) -> None:
         if not camp:
             continue
         acc = db.accounts.find_one({"_id": camp["account_id"]})
-        if gate.halt_state(db, acc["_id"], acc["client_id"]) or \
-                db.proposals.find_one({"campaign_id": camp["_id"], "status": {"$in": ["pending", "approved", "executing"]}}) or \
-                db.audit_events.find_one({"event": "policy_check", "campaign_id": camp["_id"], "action_type": "pause",
-                                          "actor_id": gate.AGENT_ID, "context.reason_kind": "stock"}):
+        rc = gate.run_cache() or {"open": set(), "checked": set()}
+        if gate.halt_state_cached(db, acc["_id"], acc["client_id"]) or camp["_id"] in rc["open"] or \
+                (camp["_id"], "pause", "stock") in rc["checked"]:
             continue
         reason = {"text": (f"{prod['name']} is out of stock in Shopify, but {camp['name']} keeps advertising it at "
                            f"${camp['daily_budget']:,.2f} a day. Pause until it's back in stock."),
@@ -340,13 +339,14 @@ def run(db, platforms, run_id: str, counts: dict) -> None:
                            "label": f"out of stock: {prod['name']}"}, "size_pct": 100, "reason": reason,
                 "requested_by": gate.AGENT_ID, "policy_id": out["policy_id"], "policy_why": out["why"],
                 "run_id": run_id, "status": "pending", "created_at": now, "expires_at": now + timedelta(hours=48)})
+            if gate.run_cache() is not None:
+                gate.run_cache()["open"].add(camp["_id"])
             counts["proposed"] += 1
     # 3. search terms: negatives for terms that cost money and never convert
     for t in db.search_terms.find({"status": "active", "conversions": 0, "cost_7d": {"$gte": 30}}):
         acc = db.accounts.find_one({"_id": t["account_id"]})
         target = f"term:{t['_id']}"
-        if not acc or gate.halt_state(db, acc["_id"], acc["client_id"]) or \
-                db.audit_events.find_one({"campaign_id": target, "event": "policy_check", "actor_id": gate.AGENT_ID}):
+        if not acc or gate.halt_state_cached(db, acc["_id"], acc["client_id"]) or _seen(db, target):
             continue
         reason = {"text": (f"Search term \"{t['term']}\" cost ${t['cost_7d']:,.2f} for {t['clicks']} clicks in 7 days "
                            f"with 0 conversions, and the intent doesn't match. Add it as a negative keyword."),

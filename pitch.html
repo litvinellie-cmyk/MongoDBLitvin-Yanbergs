@@ -1,0 +1,154 @@
+<title>Audited Ad Agent</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one reading column, a full-width flow band for the policy gate, cards only where they mark separate objects */
+:root {
+  --bg: #f5f7f9; --panel: #ffffff; --ink: #14202b; --muted: #5a6875; --line: #dde3e8;
+  --accent: #0b6e6e; --accent-soft: #dff1f0;
+  --allow: #1f7a4d; --allow-bg: #e3f3ea; --wait: #8a5a00; --wait-bg: #fbf0d9; --deny: #b42318; --deny-bg: #fde8e6;
+  --display: "Sora", "Inter", system-ui, sans-serif; --body: "Inter", system-ui, -apple-system, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f161c; --panel: #16212a; --ink: #e7edf2; --muted: #93a3b1; --line: #26333e;
+  --accent: #5fcfc6; --accent-soft: #143331;
+  --allow: #5fd39a; --allow-bg: #163326; --wait: #f0c069; --wait-bg: #3a2d12; --deny: #ff8a80; --deny-bg: #3d1a17;
+  color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0f161c; --panel: #16212a; --ink: #e7edf2; --muted: #93a3b1; --line: #26333e;
+  --accent: #5fcfc6; --accent-soft: #143331;
+  --allow: #5fd39a; --allow-bg: #163326; --wait: #f0c069; --wait-bg: #3a2d12; --deny: #ff8a80; --deny-bg: #3d1a17;
+  color-scheme: dark; }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 16px/1.6 var(--body); margin: 0; }
+.wrap { max-width: 860px; margin: 0 auto; padding-block: 40px 72px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.eyebrow { font: 600 12px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+h1 { font: 700 clamp(30px, 6vw, 48px)/1.1 var(--display); margin: 12px 0 16px; text-wrap: balance; letter-spacing: -.02em; }
+h2 { font: 700 22px/1.25 var(--display); margin: 0 0 14px; text-wrap: balance; }
+p { margin: 0 0 14px; max-width: 65ch; }
+.lede { font-size: 19px; color: var(--muted); }
+section { margin-top: 48px; display: grid; gap: 4px; }
+.quote { border-left: 3px solid var(--accent); padding: 4px 0 4px 18px; font-size: 18px; max-width: 62ch; }
+.flow { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; margin-top: 8px; }
+.step { flex: 1 1 120px; min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.step b { display: block; font: 600 14px/1.3 var(--display); }
+.step span { font-size: 13px; color: var(--muted); }
+.arrow { align-self: center; color: var(--muted); font-family: var(--mono); }
+.outcomes { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.pill { font: 600 12px/1 var(--mono); padding: 7px 10px; border-radius: 999px; }
+.p-allow { background: var(--allow-bg); color: var(--allow); } .p-wait { background: var(--wait-bg); color: var(--wait); }
+.p-deny { background: var(--deny-bg); color: var(--deny); }
+.qa { display: grid; gap: 10px; margin-top: 6px; }
+.qa div { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 14px; padding: 12px 0; border-top: 1px solid var(--line); }
+.qa div b { font-family: var(--display); font-weight: 600; }
+@media (max-width: 560px) { .qa div { grid-template-columns: 1fr; gap: 4px; } }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin-top: 6px; }
+.feat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; min-width: 0; }
+.feat b { display: block; font: 600 15px/1.3 var(--display); margin-bottom: 4px; }
+.feat span { font-size: 14px; color: var(--muted); }
+.mongo { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 12px/1.2 var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+td code, .mono { font-family: var(--mono); font-size: 13px; color: var(--accent); }
+.nums { display: flex; flex-wrap: wrap; gap: 28px; margin-top: 6px; }
+.nums div b { display: block; font: 700 30px/1.1 var(--display); color: var(--accent); font-variant-numeric: tabular-nums; }
+.nums div span { font-size: 14px; color: var(--muted); }
+ol { margin: 6px 0 0; padding-left: 22px; max-width: 65ch; } li { margin-bottom: 6px; }
+.links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+.links a { color: var(--accent); font-weight: 600; text-decoration: none; border: 1px solid var(--line); background: var(--panel);
+  padding: 9px 14px; border-radius: 10px; }
+.links a:hover, .links a:focus-visible { border-color: var(--accent); outline: none; }
+.foot { margin-top: 56px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); padding-top: 16px; }
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">Agents in Context Toronto · Track 1: Agents You Can Audit</div>
+  <h1>An ad budget agent an agency can actually trust</h1>
+  <p class="lede">It moves client ad money across Facebook, Instagram, Google, TikTok and Reddit. Every action is tied to a person, checked against rules stored in MongoDB Atlas before it runs, verified afterwards, and recorded so anyone can replay why it happened.</p>
+
+  <section>
+    <h2>Why I built it</h2>
+    <p class="quote">I do marketing for a coffee company. This morning I reviewed an AI ad tool that changes budgets every 15 minutes and won't explain how it decides. Agencies can't hand client money to something like that. One bad night can cost thousands and lose the account.</p>
+  </section>
+
+  <section>
+    <h2>One gate for every action</h2>
+    <p>Nothing touches an ad account except through this path. The agent can't skip a step.</p>
+    <div class="flow" aria-label="Policy gate flow">
+      <div class="step"><b>Agent proposes</b><span>with evidence and memory</span></div><div class="arrow">→</div>
+      <div class="step"><b>Who is acting</b><span>agent or staff role, per client</span></div><div class="arrow">→</div>
+      <div class="step"><b>Kill switch</b><span>global, client, account</span></div><div class="arrow">→</div>
+      <div class="step"><b>Policy in Atlas</b><span>first match wins, else deny</span></div><div class="arrow">→</div>
+      <div class="step"><b>Send, verify, log</b><span>re-read the platform</span></div>
+    </div>
+    <div class="outcomes"><span class="pill p-allow">ALLOW · small, safe moves</span><span class="pill p-wait">NEEDS APPROVAL · agency staff decide</span><span class="pill p-deny">DENY · against the rules</span></div>
+  </section>
+
+  <section>
+    <h2>The three Track 1 questions</h2>
+    <div class="qa">
+      <div><b>Enforced before the action?</b><span>Policies are documents with schema validation. They're checked when the agent asks and again at the moment an approved change runs.</span></div>
+      <div><b>What, why, under whose authority?</b><span>Every policy check, approval (with a required comment), send and verified result lands in the audit trail. Explain rebuilds the full story of any change.</span></div>
+      <div><b>Stop or roll back mid run?</b><span>A kill switch checked before every write, a circuit breaker that halts a client on its own when spend runs away, and one click undo through the same gate.</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>What it does for an agency</h2>
+    <div class="grid">
+      <div class="feat"><b>Staff approvals with limits</b><span>Owner approves anything, senior strategist up to $25 a day, junior can't approve. Clients only see reports.</span></div>
+      <div class="feat"><b>Evidence on every decision</b><span>Confidence vs target, CPA range, baselines, trend, expected weekly impact, risk, learning phase effect.</span></div>
+      <div class="feat"><b>Ad law built in</b><span>Housing age targeting is denied for everyone. Health ads go to compliance review. Risky ad copy is blocked.</span></div>
+      <div class="feat"><b>Memory that changes behavior</b><span>Past moves and results per client. When similar moves backfired, the agent asks a human instead.</span></div>
+      <div class="feat"><b>Beyond ads</b><span>AI search visibility (AEO/GEO), competitor ads, SEO vs paid overlap, review replies, tracking health.</span></div>
+      <div class="feat"><b>Optimization skills</b><span>Next dollar returns, goal planner, stock-aware ads, search term mining, funnel leaks, experiments, live site audit.</span></div>
+      <div class="feat"><b>Client report in plain words</b><span>"Your ads cost $5,213 and brought 142 orders at $36.72 each, better than last week."</span></div>
+      <div class="feat"><b>Platform truth check</b><span>Decisions use store or CRM verified conversions, not what Meta or TikTok claim.</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>MongoDB Atlas is the identity, policy and audit layer</h2>
+    <div class="mongo"><table>
+      <tr><th>Atlas feature</th><th>Used for</th></tr>
+      <tr><td>Schema validation</td><td><code>policies</code>, <code>actors</code>, <code>proposals</code>, <code>change_log</code>, <code>audit_events</code> reject bad data at the database</td></tr>
+      <tr><td>Change Streams</td><td>Approvals made anywhere are carried out right away</td></tr>
+      <tr><td>Vector Search</td><td><code>memories_vec</code> index for recalling similar past decisions per client</td></tr>
+      <tr><td>TTL index</td><td>Memories expire after 180 days</td></tr>
+      <tr><td>Time series collection</td><td>Campaign metrics pulled every 15 minutes</td></tr>
+      <tr><td>Aggregation pipelines</td><td>7 and 14 day KPIs, baselines, before and after outcomes</td></tr>
+      <tr><td>Unique partial index</td><td>Never two open proposals for the same campaign</td></tr>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>In the demo</h2>
+    <div class="nums">
+      <div><b>3</b><span>clients, 8 ad accounts</span></div>
+      <div><b>5</b><span>platforms plus Shopify</span></div>
+      <div><b>28</b><span>proposals in one run</span></div>
+      <div><b>$236</b><span>a week of paid search found wasted</span></div>
+    </div>
+    <ol>
+      <li>Run the agent: small moves apply, bigger ones wait, a protected campaign is denied.</li>
+      <li>Open the evidence on a proposal, then try to approve as a junior. Denied.</li>
+      <li>Approve as the owner with a comment. The platform re-read shows verified.</li>
+      <li>Show the TikTok card where memory changed the decision.</li>
+      <li>Simulate a spend spike. The circuit breaker stops that client by itself.</li>
+      <li>Open the client report: what the business owner sees.</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>Links</h2>
+    <div class="links">
+      <a href="https://github.com/litvinellie-cmyk/MongoDBLitvin-Yanbergs">GitHub repository</a>
+    </div>
+    <p style="margin-top:12px">Ad accounts in the demo run on simulated data, so no real money moves. The prospect site audit is live. Real Meta, Google, TikTok and Reddit adapters have their API calls documented in the code.</p>
+  </section>
+
+  <div class="foot">Built in one day at Agents in Context Toronto, a MongoDB hackathon, November 14, 2026.</div>
+</div>

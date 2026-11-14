@@ -40,6 +40,7 @@ def seed_identity_and_policy(db) -> None:
         db.actors.replace_one({"_id": a["_id"]}, a, upsert=True)
     for p in DEFAULT_POLICIES:
         db.policies.replace_one({"_id": p["_id"]}, {**p, "active": True}, upsert=True)
+    gate.invalidate()
 
 
 def _oid(pid):
@@ -171,9 +172,11 @@ def set_halt(db, actor_id: str, halted: bool, reason: str = "", client_id: str |
     if effect != "allow":
         return {"ok": False, "error": f"denied by {pid}: {why}"}
     now = utcnow()
+    gate.invalidate()
     db.controls.update_one({"_id": scope}, {"$set": {
         "halted": halted, "halted_by": actor_id if halted else None,
         "reason": reason, "changed_at": now}}, upsert=True)
+    gate.invalidate()
     if halted and scope == "global":
         db.runs.update_many({"status": "running"}, {"$set": {"status": "halted", "ended_at": now}})
         # Pending proposals wait; nothing executes while halted.
