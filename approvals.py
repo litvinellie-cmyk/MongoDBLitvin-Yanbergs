@@ -1,7 +1,7 @@
 """Command line for the humans. Every command runs as a named actor.
 
   python approvals.py list
-  python approvals.py approve <proposal_id> <actor>     e.g. user:ellie
+  python approvals.py approve <proposal_id> <actor> [comment]   e.g. user:ellie
   python approvals.py reject  <proposal_id> <actor>
   python approvals.py undo    <change_id>   <actor>
   python approvals.py halt    <actor> "<reason>"
@@ -45,8 +45,8 @@ def main():
     cmd = a[0] if a else ""
     if cmd == "list":
         list_pending(db)
-    elif cmd in ("approve", "reject") and len(a) == 3:
-        print(ops.decide_proposal(db, platforms, a[1], cmd, a[2]))
+    elif cmd in ("approve", "reject") and len(a) >= 3:
+        print(ops.decide_proposal(db, platforms, a[1], cmd, a[2], " ".join(a[3:]) or f"{cmd}d from the command line"))
     elif cmd == "undo" and len(a) == 3:
         print(ops.undo(db, platforms, a[1], a[2]))
     elif cmd == "halt" and len(a) >= 2:

@@ -26,6 +26,17 @@ An agent manages ad budgets for an agency with many clients, across Facebook + I
 
 Demo clients (all made up): Harbour Coffee Co. (FB + IG, TikTok, Reddit, Shopify), Bright Smile Dental (Google, FB + IG), Northside Realty (FB + IG, Google).
 
+## Two views: the agency decides, the client understands
+
+| Agency dashboard (for you and your team) | Client report (for the business owner) |
+|---|---|
+| Spend, impressions, reach, frequency, CPM, CPC, CTR, verified vs platform-reported conversions, CVR, CPA vs target, ROAS, AOV, for every campaign | One sentence summary: what was spent, what it brought, cost per customer vs goal and last week |
+| Every proposal carries **evidence**: statistical confidence vs target, 95% CPA range, previous period and account baselines, trend, expected weekly impact, risk level, learning phase effect, tracking check, and the options considered | Where the money went, by platform, with a traffic light (working well, being tuned, fixing) |
+| Approvals by agency staff only, each with a required comment: owner approves anything, senior strategist up to $25 a day, junior cannot approve, analyst read only | "What we changed and why" in plain sentences, plus what is under review next |
+| Agent accuracy (share of past moves that helped), full decision log export as CSV | Save as PDF button |
+
+Clients never approve anything. Only agency staff do.
+
 ## Three problems agencies actually have
 
 | Problem | What the agent does | MongoDB feature |
@@ -38,13 +49,14 @@ Demo clients (all made up): Harbour Coffee Co. (FB + IG, TikTok, Reddit, Shopify
 
 0. Start in **All clients** to show the agency view, then click **Harbour Coffee Co.**
 1. **Run agent now.** Budget bot raises "winner" 10% on its own (policy allows), proposes cutting "pricey" 15% and pausing "dud" (policy requires a human), and gets **denied** on "brand" because it's tagged protected.
-2. Switch "Acting as" to **Dr. Lee (Bright Smile owner)** and approve a Harbour change. Denied: a client owner can't touch another client's ads. The denial goes into the audit trail.
-3. Switch to **Sam (Harbour Coffee owner)** and approve "pricey". The policy is checked again under her identity, the change is sent, and the platform re-read shows **VERIFIED**.
+2. Open the **Evidence** on the "pricey" card: 99% confident it's above target, CPA range, baseline, expected impact, risk.
+3. Switch "Acting as" to **Alex (junior)** and approve: denied. Switch to **Ellie (agency owner)** and approve "pricey" with a comment. The policy is checked again under her identity, the change is sent, and the platform re-read shows **VERIFIED**.
 4. Click **explain** on that change to see the full reconstruction.
 5. Click **Halt agent**, then **Run agent now**. Nothing runs, and that's logged too.
 6. **Resume**, then **undo** the "pricey" change. The budget goes back to $160, with the undo linked to the original change.
 7. On Harbour, show the TikTok "ugc-videos" card: **Memory changed this decision**, because 3 similar TikTok increases made things worse.
-8. Switch to **Northside Realty**: the agent's age targeting was **denied** by the housing ad rules. Click **Simulate spend spike**: the circuit breaker halts Northside on its own, with a red banner explaining why.
+8. Click **Client report** to show what the client sees: plain language, no jargon.
+9. Switch to **Northside Realty**: the agent's age targeting was **denied** by the housing ad rules. Click **Simulate spend spike**: the circuit breaker halts Northside on its own, with a red banner explaining why.
 
 ## How it fits together
 

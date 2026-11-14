@@ -17,6 +17,8 @@ from urllib.parse import parse_qs, urlparse
 
 import memory
 import ops
+import report
+from evidence import kpis
 from platforms import PLATFORM_LABELS, build_platforms, utcnow
 from rules import merged_settings
 from store import campaign_stats, day_str, get_db
@@ -43,7 +45,9 @@ def state(client: str = "all") -> dict:
         for c in DB.sandbox_campaigns.find({"account_id": acc["_id"]}).sort("_id", 1):
             st = stats.get(c["_id"], {})
             conv = st.get("conversions", 0)
+            k = kpis(st) if st else kpis({})
             campaigns.append({
+                "kpis": k, "last_ts": st.get("last_ts"),
                 "id": c["_id"], "name": c["name"], "status": c["status"], "tags": c.get("tags", []),
                 "client": names.get(acc["client_id"], acc["client_id"]), "platform": acc["platform"],
                 "platform_label": PLATFORM_LABELS.get(acc["platform"], acc["platform"]),
@@ -70,12 +74,38 @@ def state(client: str = "all") -> dict:
             {} if client == "all" else {"account_id": {"$in": acc_ids}}).sort("applied_at", -1).limit(20)),
         "events": list(DB.audit_events.find(ev_q).sort([("at", -1), ("_id", -1)]).limit(80)),
         "policies": list(DB.policies.find().sort("priority", 1)),
+        "accuracy": accuracy(scoped),
         "memories": list(DB.memories.find(scoped, {"embedding": 0}).sort("created_at", -1).limit(30)),
         "breaker_events": list(DB.audit_events.find({"event": "circuit_breaker", **scoped})
                                .sort("at", -1).limit(3)),
         "pending_by_client": {c["_id"]: DB.proposals.count_documents({"status": "pending", "client_id": c["_id"]})
                               for c in clients},
     }
+
+
+def accuracy(scoped: dict) -> dict:
+    """How often past agent decisions improved results (from measured outcomes)."""
+    better = DB.memories.count_documents({**scoped, "verdict": "better"})
+    worse = DB.memories.count_documents({**scoped, "verdict": "worse"})
+    n = better + worse
+    return {"better": better, "worse": worse, "pct": round(better / n * 100) if n else None}
+
+
+def export_csv(client: str) -> bytes:
+    import csv
+    import io
+    q = {} if client == "all" else {"client_id": client}
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["time", "client", "event", "actor", "campaign", "action", "effect", "policy", "detail"])
+    for e in DB.audit_events.find(q).sort([("at", 1), ("_id", 1)]):
+        detail = e.get("why") or e.get("reason") or e.get("summary") or e.get("comment") or ""
+        if e.get("result"):
+            detail = str(e["result"])
+        w.writerow([e["at"].isoformat(), e.get("client_id", ""), e["event"], e.get("actor_id", ""),
+                    e.get("campaign_id", ""), e.get("action_type") or (e.get("action") or {}).get("type", ""),
+                    e.get("effect", ""), e.get("policy_id", ""), detail])
+    return buf.getvalue().encode()
 
 
 def spike(client_id):
@@ -110,6 +140,17 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, PAGE, "text/html; charset=utf-8")
         if u.path == "/api/state":
             return self._send(200, state(parse_qs(u.query).get("client", ["all"])[0]))
+        if u.path == "/report":
+            cid = parse_qs(u.query).get("client", [""])[0]
+            return self._send(200, report.render(DB, cid).encode(), "text/html; charset=utf-8")
+        if u.path == "/api/export":
+            cid = parse_qs(u.query).get("client", ["all"])[0]
+            self.send_response(200)
+            self.send_header("Content-Type", "text/csv")
+            self.send_header("Content-Disposition", f'attachment; filename="decision-log-{cid}.csv"')
+            self.end_headers()
+            self.wfile.write(export_csv(cid))
+            return
         if u.path == "/api/explain":
             aid = parse_qs(u.query).get("id", [""])[0]
             return self._send(200, ops.explain(DB, aid))
@@ -124,7 +165,8 @@ class Handler(BaseHTTPRequestHandler):
             if p == "/api/run":
                 out = run_once(DB, PLATFORMS)
             elif p == "/api/decide":
-                out = ops.decide_proposal(DB, PLATFORMS, body["id"], body["decision"], actor)
+                out = ops.decide_proposal(DB, PLATFORMS, body["id"], body["decision"], actor,
+                                          body.get("comment", ""))
             elif p == "/api/undo":
                 out = ops.undo(DB, PLATFORMS, body["id"], actor)
             elif p == "/api/spike":

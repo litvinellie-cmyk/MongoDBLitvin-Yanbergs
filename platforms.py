@@ -91,7 +91,16 @@ class SandboxPlatform(Platform):
         frac_up = _noise(c["_id"], day, "f") * 2 - 1.5  # [0, 1)
         conv = int(spend / (true_cpl * _noise(c["_id"], day, "c")) + max(0.0, frac_up))
         clicks = int(spend * c["clicks_per_dollar"])
-        return {"spend": spend, "conversions": conv, "clicks": clicks, "impressions": clicks * 40}
+        impressions = int(clicks * (38 + 10 * _noise(c["_id"], day, "i")))
+        # Ad platforms over-count (view-through, double attribution). `conversions`
+        # is the verified number (store or CRM); `reported_conversions` is what the
+        # platform claims. The agent decides on verified numbers only.
+        over = {"meta": 1.3, "tiktok": 1.45, "reddit": 1.2, "google": 1.1}.get(c.get("platform"), 1.15)
+        value = c.get("value_per_conversion", 0.0)
+        return {"spend": spend, "conversions": conv, "clicks": clicks, "impressions": impressions,
+                "reach": int(impressions / (1.6 + 0.4 * _noise(c["_id"], day, "r"))),
+                "reported_conversions": int(round(conv * over * _noise(c["_id"], day, "o") ** 0.5)),
+                "revenue": round(conv * value * _noise(c["_id"], day, "v"), 2)}
 
     def fetch_campaigns(self, account, now):
         day = now.date().isoformat()
@@ -150,6 +159,8 @@ class SandboxPlatform(Platform):
                  "name": name, "status": "ACTIVE", "daily_budget": budget, "base_budget": budget,
                  "true_cpl": cpl, "clicks_per_dollar": cpd, "tags": tags,
                  "targeting": extra.get("targeting", {"age_min": 18, "age_max": 65}),
+                 "platform": account["platform"],
+                 "value_per_conversion": settings.get("value_per_conversion", 0.0),
                  "insights": extra.get("insights", {})},
                 upsert=True,
             )

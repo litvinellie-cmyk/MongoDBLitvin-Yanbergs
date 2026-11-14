@@ -50,6 +50,8 @@ def campaign_stats(db, account_id: str, first_day: str, last_day: str,
             "spend": {"$last": "$spend"}, "conversions": {"$last": "$conversions"},
             "clicks": {"$last": "$clicks"}, "daily_budget": {"$last": "$daily_budget"},
             "status": {"$last": "$status"}, "ts": {"$last": "$ts"},
+            "impressions": {"$last": "$impressions"}, "reach": {"$last": "$reach"},
+            "reported_conversions": {"$last": "$reported_conversions"}, "revenue": {"$last": "$revenue"},
         }},
         {"$sort": {"ts": 1}},
         {"$group": {
@@ -57,9 +59,13 @@ def campaign_stats(db, account_id: str, first_day: str, last_day: str,
             "spend": {"$sum": "$spend"}, "conversions": {"$sum": "$conversions"},
             "clicks": {"$sum": "$clicks"}, "daily_budget": {"$last": "$daily_budget"},
             "status": {"$last": "$status"}, "days": {"$sum": 1},
+            "impressions": {"$sum": "$impressions"}, "reach": {"$sum": "$reach"},
+            "reported_conversions": {"$sum": "$reported_conversions"}, "revenue": {"$sum": "$revenue"},
+            "last_ts": {"$last": "$ts"},
         }},
         {"$project": {"_id": 0, "campaign_id": "$_id", "spend": 1, "conversions": 1,
-                      "clicks": 1, "daily_budget": 1, "status": 1, "days": 1}},
+                      "clicks": 1, "daily_budget": 1, "status": 1, "days": 1, "impressions": 1,
+                      "reach": 1, "reported_conversions": 1, "revenue": 1, "last_ts": 1}},
     ]
     return list(db.metrics_snapshots.aggregate(pipeline))
 

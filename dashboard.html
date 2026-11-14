@@ -42,6 +42,15 @@ table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
 th { color: var(--muted); font-weight: 500; font-size: 12px; }
 td.num { font-variant-numeric: tabular-nums; }
+.btnlink { font: inherit; border-radius: 8px; border: 1px solid var(--line); padding: 6px 10px; color: var(--ink); text-decoration: none; }
+.btnlink:hover { border-color: var(--muted); }
+details.ev { margin-top: 8px; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+details.ev summary { cursor: pointer; font-weight: 600; font-size: 13px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; list-style: none; }
+details.ev summary::before { content: "▸"; } details.ev[open] summary::before { content: "▾"; }
+.evgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px 14px; margin: 8px 0; font-size: 13px; }
+.evgrid div span { display: block; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+.risk-low { background: var(--allow-bg); color: var(--allow); } .risk-medium { background: var(--wait-bg); color: var(--wait); } .risk-high { background: var(--deny-bg); color: var(--deny); }
+td.k { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr)); gap: 10px; margin-bottom: 12px; }
 .ccard { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; cursor: pointer; }
 .ccard:hover { border-color: var(--muted); }
@@ -90,6 +99,9 @@ code { font-size: 12px; }
     <select id="actor"></select>
     <button id="run" class="primary">Run agent now</button>
     <button id="haltBtn" class="danger">Halt agent</button>
+    <a id="reportLink" class="btnlink" target="_blank">Client report</a>
+    <a id="exportLink" class="btnlink">Export decision log</a>
+    <span id="acc" class="pill on"></span>
     <button id="spikeBtn" title="Demo: one campaign starts spending 4x too fast">Simulate spend spike</button>
   </div>
 </header>
@@ -165,6 +177,35 @@ function badge(effect) {
   const label = {allow: "ALLOW", require_approval: "NEEDS APPROVAL", deny: "DENY"}[effect] || effect;
   return `<span class="badge ${esc(effect)}">${esc(label)}</span>`;
 }
+function evidenceHTML(ev) {
+  if (!ev) return "";
+  const k = ev.kpis || {}, b = ev.baseline || {}, im = ev.impact || {};
+  const cell = (label, val) => `<div><span>${esc(label)}</span>${val}</div>`;
+  return `<details class="ev"><summary>Evidence <span class="badge risk-${esc(ev.risk)}">${esc((ev.risk || "").toUpperCase())} RISK</span>
+      ${ev.confidence_pct != null ? `<span class="badge info">${ev.confidence_pct}% CONFIDENT</span>` : ""}</summary>
+    ${ev.confidence_text ? `<div style="margin-top:6px">${esc(ev.confidence_text)}</div>` : ""}
+    <div class="evgrid">
+      ${cell("Window", ev.window_days + " days")}
+      ${cell("Spend", money(k.spend))}
+      ${cell("Impressions / reach", (k.impressions || 0).toLocaleString() + " / " + (k.reach || 0).toLocaleString())}
+      ${cell("Clicks / CTR", (k.clicks || 0).toLocaleString() + " / " + (k.ctr ?? "n/a") + "%")}
+      ${cell("CPM / CPC", money(k.cpm) + " / " + money(k.cpc))}
+      ${cell("Conversions (verified)", k.conversions + " · CVR " + (k.cvr ?? "n/a") + "%")}
+      ${cell("CPA / target", money(k.cpa) + " / " + money(ev.target_cpa))}
+      ${cell("CPA 95% range", ev.cpa_range_95 && ev.cpa_range_95[0] != null ? money(ev.cpa_range_95[0]) + " to " + money(ev.cpa_range_95[1]) : "n/a")}
+      ${cell("Previous period CPA", money(b.previous_period_cpa) + (b.change_vs_previous_pct != null ? " (" + (b.change_vs_previous_pct > 0 ? "+" : "") + b.change_vs_previous_pct + "%)" : ""))}
+      ${cell("Trend", esc(b.trend))}
+      ${cell("Account avg CPA", money(b.account_avg_cpa))}
+      ${k.roas != null ? cell("ROAS / AOV", k.roas + "x / " + money(k.aov)) : ""}
+      ${cell("Frequency", k.frequency ?? "n/a")}
+    </div>
+    ${im.summary ? `<div><b>Expected impact:</b> ${esc(im.summary)}</div>` : ""}
+    <div><b>Learning phase:</b> ${esc(ev.learning_phase)}</div>
+    <div><b>Tracking check:</b> ${esc(ev.tracking)}</div>
+    ${(ev.alternatives || []).length ? `<div style="margin-top:4px"><b>Options considered:</b><ul style="margin:4px 0 0 18px;padding:0">${ev.alternatives.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
+    <div class="muted" style="margin-top:4px">Data as of ${ev.data_as_of ? new Date(ev.data_as_of).toLocaleString() : "n/a"}</div>
+  </details>`;
+}
 function eventLine(e) {
   const who = `<b>${esc(e.actor_id || "system")}</b>`;
   const act = e.action_id ? ` <button class="link" data-explain="${esc(e.action_id)}">${esc(e.action_id)}</button>` : "";
@@ -193,6 +234,10 @@ function render() {
   $("halt").className = "pill " + (stopped ? "off" : "on");
   $("haltBtn").textContent = (S.halted ? "Resume " : "Halt ") + (S.client === "all" ? "all clients" : cname);
   $("haltBtn").className = S.halted ? "ok" : "danger";
+  $("reportLink").style.display = S.client === "all" ? "none" : "";
+  $("reportLink").href = "/report?client=" + encodeURIComponent(S.client);
+  $("exportLink").href = "/api/export?client=" + encodeURIComponent(S.client);
+  $("acc").textContent = S.accuracy && S.accuracy.pct != null ? `Agent accuracy ${S.accuracy.pct}% (${S.accuracy.better} of ${S.accuracy.better + S.accuracy.worse} past moves helped)` : "Agent accuracy: no outcomes yet";
   const copts = `<option value="all">All clients (agency view)</option>` + S.clients.map((c) =>
     `<option value="${esc(c._id)}">${esc(c.name)}${S.pending_by_client[c._id] ? " · " + S.pending_by_client[c._id] + " waiting" : ""}</option>`).join("");
   const csel = $("client");
@@ -224,10 +269,15 @@ function render() {
   if (sel.dataset.opts !== opts) { sel.innerHTML = opts; sel.dataset.opts = opts; }
   sel.value = S.actors.some((a) => a._id === cur) ? cur : "user:ellie";
 
-  setHTML("camps", "<tr><th>Campaign</th><th>Platform</th><th>Status</th><th>Budget/day</th><th>Spend</th><th>Leads</th><th>CPL / target</th></tr>" +
-    S.campaigns.map((c) => `<tr><td>${esc(c.name)} ${c.tags.map((x) => `<span class="tag">${esc(x)}</span>`).join(" ")}${S.client === "all" ? `<div class="muted">${esc(c.client)}</div>` : ""}</td><td>${plat(c.platform, c.platform_label)}</td>
-      <td>${esc(c.status)}</td><td class="num">${money(c.daily_budget)}</td><td class="num">${money(c.spend)}</td>
-      <td class="num">${c.conversions}</td><td class="num">${money(c.cpl)}<div class="muted">${money(c.target_cpl)}</div></td></tr>`).join(""));
+  const n0 = (x, d = 0) => x == null ? "n/a" : Number(x).toLocaleString(undefined, {maximumFractionDigits: d, minimumFractionDigits: d});
+  setHTML("camps", "<tr><th>Campaign</th><th>Platform</th><th>Budget/day</th><th>Spend</th><th>Impr.</th><th>Freq.</th><th>CPM</th><th>Clicks</th><th>CPC</th><th>CTR</th><th>Conv. verified / platform</th><th>CVR</th><th>CPA / target</th><th>ROAS</th></tr>" +
+    S.campaigns.map((c) => { const k = c.kpis || {}; return `<tr><td>${esc(c.name)} ${c.tags.map((x) => `<span class="tag">${esc(x)}</span>`).join(" ")}${c.status !== "ACTIVE" ? ' <span class="tag">' + esc(c.status) + "</span>" : ""}${S.client === "all" ? `<div class="muted">${esc(c.client)}</div>` : ""}</td>
+      <td>${plat(c.platform, c.platform_label)}</td><td class="k">${money(c.daily_budget)}</td><td class="k">${money(k.spend)}</td>
+      <td class="k">${n0(k.impressions)}</td><td class="k">${n0(k.frequency, 2)}</td><td class="k">${money(k.cpm)}</td><td class="k">${n0(k.clicks)}</td>
+      <td class="k">${money(k.cpc)}</td><td class="k">${n0(k.ctr, 2)}%</td>
+      <td class="k">${n0(k.conversions)} / ${n0(k.reported_conversions)}${k.platform_overcount_pct > 10 ? `<div class="muted">platform +${n0(k.platform_overcount_pct)}%</div>` : ""}</td>
+      <td class="k">${n0(k.cvr, 2)}%</td>
+      <td class="k">${money(k.cpa)}<div class="muted">${money(c.target_cpl)}</div></td><td class="k">${k.roas == null ? "n/a" : n0(k.roas, 2) + "x"}</td></tr>`; }).join(""));
 
   setHTML("props", S.proposals.length ? S.proposals.map((p) => `<div class="card">
       <div class="row"><b>${plat(p.platform)} ${esc(p.campaign_id)}: ${esc(p.action.type)} ${p.action.type === "set_budget" ? money(p.action.old) + " → " + money(p.action.new) : p.action.type === "set_targeting" ? "ages " + p.action.new.age_min + " to " + p.action.new.age_max : ""}</b>
@@ -236,6 +286,7 @@ function render() {
       ${p.reason.memory && p.reason.memory.summary ? `<div class="mem ${p.reason.memory.warning ? "warn" : ""}"><b>${p.reason.memory.warning ? "⚠ Memory changed this decision" : "Memory"}</b> (${esc(p.reason.memory.method)}): ${esc(p.reason.memory.summary)}
         <div class="muted">${p.reason.memory.hits.map((h) => esc(h.text)).join("<br>")}</div></div>` : ""}
       ${p.policy_why ? `<div class="muted" style="margin-top:6px">Why a human: ${esc(p.policy_why)}</div>` : ""}
+      ${evidenceHTML(p.reason.evidence)}
       <div class="row" style="margin-top:8px"><span class="muted">asked by ${esc(p.requested_by)} · <button class="link" data-explain="${esc(p.action_id)}">${esc(p.action_id)}</button></span>
       <span><button data-decide="reject" data-id="${esc(p._id)}">Reject</button> <button class="ok" data-decide="approve" data-id="${esc(p._id)}">Approve</button></span></div>
     </div>`).join("") : '<div class="empty">Nothing waiting.</div>');
@@ -243,7 +294,7 @@ function render() {
   setHTML("changes", "<tr><th>Time</th><th>Campaign</th><th>Change</th><th>By</th><th>Result</th><th></th></tr>" +
     (S.changes.map((c) => `<tr><td>${t(c.applied_at)}</td><td>${esc(c.campaign_id)}</td>
       <td>${esc(c.action.type)} ${c.action.type === "set_budget" ? money(c.action.old) + " → " + money(c.action.new) : c.action.type === "set_targeting" ? "ages " + c.action.new.age_min + " to " + c.action.new.age_max : ""}${c.reverts ? ' <span class="tag">undo</span>' : ""}</td>
-      <td>${esc(c.actor_id)}<div class="muted">${esc(c.mode)}${c.approval ? ", approved by " + esc(c.approval.approved_by) : ""}</div></td>
+      <td>${esc(c.actor_id)}<div class="muted">${esc(c.mode)}${c.approval ? ", approved by " + esc(c.approval.approved_by) + (c.approval.comment ? ': "' + esc(c.approval.comment) + '"' : "") : ""}</div></td>
       <td>${c.result.ok ? (c.result.verified ? badge("allow").replace("ALLOW", "VERIFIED") : '<span class="badge pending">UNVERIFIED</span>') : badge("deny").replace("DENY", "FAILED")}</td>
       <td><button class="link" data-explain="${esc(c.action_id)}">explain</button>${c.result.ok && !c.reverts ? ` · <button class="link" data-undo="${esc(c._id)}">undo</button>` : ""}</td></tr>`).join("") ||
       '<tr><td colspan="6" class="empty">No changes yet.</td></tr>'));
@@ -269,7 +320,7 @@ async function explain(id) {
     if (e.event === "policy_check") text = `Policy check as ${e.actor_id} (${(e.roles || []).join(", ")}): ${e.effect} by ${e.policy_id}. ${e.why}`;
     else if (e.event === "action_sent") text = `${e.actor_id} sent ${e.action.type} to the ad platform`;
     else if (e.event === "action_result") text = e.result.ok ? `Platform re-read: ${JSON.stringify(e.result.observed)} (${e.result.verified ? "verified" : "not verified"})` : `Failed: ${e.result.error}`;
-    else if (e.actor_id) text += ` by ${e.actor_id}`;
+    else if (e.actor_id) text += ` by ${e.actor_id}` + (e.comment ? `: "${e.comment}"` : "");
     steps.push([t(e.at), text]);
   }
   for (const u of x.undone_by) steps.push(["Undone", `${u.actor_id} reverted it at ${t(u.applied_at)} (${u.action_id})`]);
@@ -282,7 +333,11 @@ document.addEventListener("click", async (ev) => {
   if (card) { CLIENT = card.dataset.client; try { localStorage.setItem("client", CLIENT); } catch (e) {} return load(); }
   const b = ev.target.closest("button"); if (!b) return;
   if (b.dataset.explain) return explain(b.dataset.explain);
-  if (b.dataset.decide) return post("/api/decide", {id: b.dataset.id, decision: b.dataset.decide});
+  if (b.dataset.decide) {
+    const comment = prompt(b.dataset.decide === "approve" ? "Why are you approving this? (saved to the audit trail)" : "Why are you rejecting this?", "");
+    if (comment === null) return;
+    return post("/api/decide", {id: b.dataset.id, decision: b.dataset.decide, comment});
+  }
   if (b.dataset.undo) return post("/api/undo", {id: b.dataset.undo});
   if (b.dataset.forget) return post("/api/forget", {id: b.dataset.forget});
 });

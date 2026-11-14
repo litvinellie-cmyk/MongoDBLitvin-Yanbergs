@@ -14,14 +14,20 @@ from policy import DEFAULT_POLICIES
 
 DEMO_ACTORS = [
     {"_id": gate.AGENT_ID, "kind": "agent", "name": "Budget bot", "roles": ["agent"], "active": True},
-    # Agency lead: approver and admin for every client.
-    {"_id": "user:ellie", "kind": "human", "name": "Ellie (agency)", "roles": ["approver", "admin"],
+    # Agency staff. Only the agency approves; clients only read their reports.
+    {"_id": "user:ellie", "kind": "human", "name": "Ellie (agency owner)", "roles": ["approver", "admin"],
      "grants": [], "active": True},
-    # Client owners: approver for their own business only.
-    {"_id": "user:harbour-owner", "kind": "human", "name": "Sam (Harbour Coffee owner)", "roles": [],
-     "grants": [{"client_id": "harbour", "roles": ["approver"]}], "active": True},
-    {"_id": "user:dental-owner", "kind": "human", "name": "Dr. Lee (Bright Smile owner)", "roles": [],
-     "grants": [{"client_id": "brightsmile", "roles": ["approver"]}], "active": True},
+    {"_id": "user:maya", "kind": "human", "name": "Maya (senior strategist, up to $25/day)",
+     "roles": ["senior"], "grants": [], "active": True},
+    {"_id": "user:alex", "kind": "human", "name": "Alex (junior, cannot approve)", "roles": ["junior"],
+     "grants": [], "active": True},
+    {"_id": "user:analyst", "kind": "human", "name": "Priya (analyst, read only)", "roles": ["viewer"],
+     "grants": [], "active": True},
+    # Clients: can read their own report, nothing else.
+    {"_id": "user:harbour-owner", "kind": "human", "name": "Sam (Harbour Coffee client)", "roles": [],
+     "grants": [{"client_id": "harbour", "roles": ["client"]}], "active": True},
+    {"_id": "user:dental-owner", "kind": "human", "name": "Dr. Lee (Bright Smile client)", "roles": [],
+     "grants": [{"client_id": "brightsmile", "roles": ["client"]}], "active": True},
     {"_id": "agent:circuit-breaker", "kind": "agent", "name": "Circuit breaker", "roles": ["breaker"],
      "grants": [], "active": True},
     {"_id": "user:guest", "kind": "human", "name": "Guest viewer", "roles": ["viewer"], "grants": [],
@@ -47,26 +53,31 @@ def _live_campaign(platform, account, campaign_id):
     return None
 
 
-def decide_proposal(db, platforms, pid, decision: str, actor_id: str) -> dict:
-    """decision: 'approve' | 'reject'. Approve also executes right away."""
+def decide_proposal(db, platforms, pid, decision: str, actor_id: str, comment: str = "") -> dict:
+    """decision: 'approve' | 'reject'. Approve also executes right away. A comment is required."""
     p = db.proposals.find_one({"_id": _oid(pid)})
     if not p or p["status"] != "pending":
         return {"ok": False, "error": "not found or not pending"}
+    if not (comment or "").strip():
+        return {"ok": False, "error": "Add a short comment saying why. It goes into the audit trail."}
+    a = p["action"]
+    usd = (abs(a["new"] - a["old"]) if a["type"] == "set_budget"
+           else (a.get("old") or 0) if a["type"] == "pause" else 0.0)
     ctx = {"action_type": decision, "account_id": p["account_id"], "campaign_id": p["campaign_id"],
-           "client_id": p.get("client_id"), "platform": p.get("platform")}
+           "client_id": p.get("client_id"), "platform": p.get("platform"), "change_usd": round(usd, 2)}
     effect, policy_id, why = gate.check(db, actor_id, ctx, action_id=p.get("action_id"))
     if effect != "allow":
         return {"ok": False, "error": f"denied by {policy_id}: {why}"}
     status = "approved" if decision == "approve" else "rejected"
     r = db.proposals.update_one(
         {"_id": p["_id"], "status": "pending"},
-        {"$set": {"status": status, "decided_at": utcnow(), "decided_by": actor_id}},
+        {"$set": {"status": status, "decided_at": utcnow(), "decided_by": actor_id, "comment": comment}},
     )
     if not r.modified_count:
         return {"ok": False, "error": "someone else decided first"}
     gate.audit(db, f"proposal_{status}", actor_id=actor_id, action_id=p.get("action_id"),
                proposal_id=str(p["_id"]), campaign_id=p["campaign_id"], policy_id=policy_id,
-               client_id=p.get("client_id"))
+               client_id=p.get("client_id"), comment=comment)
     if status == "approved":
         return execute_proposal(db, platforms, p["_id"])
     return {"ok": True, "status": status}
@@ -97,7 +108,7 @@ def execute_proposal(db, platforms, pid) -> dict:
     out = gate.attempt(
         db, platform, account, live, a, p["reason"], actor_id=p["decided_by"], mode="approved",
         action_id=p.get("action_id"), on_behalf_of=p.get("requested_by"),
-        approval={"proposal_id": str(p["_id"]), "approved_by": p["decided_by"],
+        approval={"proposal_id": str(p["_id"]), "approved_by": p["decided_by"], "comment": p.get("comment"),
                   "requested_by": p.get("requested_by")},
     )
     if out["effect"] != "allow":

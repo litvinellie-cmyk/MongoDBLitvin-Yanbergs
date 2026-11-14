@@ -17,6 +17,7 @@ from datetime import timedelta
 import gate
 from ops import seed_identity_and_policy
 from platforms import build_platforms, platform_for, utcnow
+import evidence
 import memory
 import ops
 from rules import decide, decide_targeting, merged_settings
@@ -55,11 +56,11 @@ def check_pace(db, account, live, budget_total, s, now, run_id) -> bool:
     return bool(out.get("ok"))
 
 
-def act(db, platform, account, camp, a, s, now, run_id, counts):
+def act(db, platform, account, camp, a, s, now, run_id, counts, ev=None):
     """Recall memory, ask the gate, then apply, queue or record the denial."""
     cid = camp["campaign_id"]
     client_id = account.get("client_id")
-    reason = {"text": a.reason, "numbers": a.numbers}
+    reason = {"text": a.reason, "numbers": a.numbers, "evidence": ev}
     extra = {}
     if a.type in ("set_budget", "pause"):
         target = a.numbers.get("target_cpl") or 1
@@ -141,8 +142,9 @@ def run_once(db, platforms, now=None) -> dict:
                 "ts": now, "day": day_str(now),
                 "meta": {"account_id": account["_id"], "campaign_id": c["campaign_id"],
                          "platform": account["platform"]},
-                **{k: c[k] for k in ("status", "daily_budget", "spend", "conversions",
-                                     "clicks", "impressions")},
+                **{k: c.get(k, 0) for k in ("status", "daily_budget", "spend", "conversions",
+                                            "clicks", "impressions", "reach", "reported_conversions",
+                                            "revenue")},
             } for c in live])
             counts["snapshots"] += len(live)
         live_by_id = {c["campaign_id"]: c for c in live}
@@ -155,7 +157,14 @@ def run_once(db, platforms, now=None) -> dict:
                 counts["breaker_trips"] = counts.get("breaker_trips", 0) + 1
 
         first = day_str(now - timedelta(days=s["window_days"] - 1))
-        for stats in campaign_stats(db, account["_id"], first, day_str(now)):
+        current = campaign_stats(db, account["_id"], first, day_str(now))
+        prior = {r["campaign_id"]: r for r in campaign_stats(
+            db, account["_id"], day_str(now - timedelta(days=2 * s["window_days"] - 1)),
+            day_str(now - timedelta(days=s["window_days"])))}
+        tot_spend = sum(r["spend"] for r in current)
+        tot_conv = sum(r["conversions"] for r in current)
+        account_cpa = round(tot_spend / tot_conv, 2) if tot_conv else None
+        for stats in current:
             # Kill switch is checked between every step, not only at the start.
             if gate.halt_state(db, account["_id"], client_id):
                 counts["halted_accounts"] = counts.get("halted_accounts", 0) + 1
@@ -172,7 +181,8 @@ def run_once(db, platforms, now=None) -> dict:
             for a in [w for w in wanted if w]:
                 if has_open_proposal(db, cid):
                     break
-                out = act(db, platform, account, camp, a, s, now, run_id, counts)
+                ev = evidence.build(a, stats, prior.get(cid), account_cpa, s, stats.get("last_ts"))
+                out = act(db, platform, account, camp, a, s, now, run_id, counts, ev)
                 if out and out["effect"] == "allow" and out["result"]["ok"] and a.type == "set_budget":
                     budget_total += a.new - a.old
         if gate.halt_state(db, None):  # global stop: no more accounts
@@ -204,7 +214,7 @@ def seed(db, platforms, reset=False):
                        "adapter": "sandbox", "external_id": acc["_id"], "name": acc["name"],
                        "active": True}
             platforms["sandbox"].seed_account(db, account, acc.get("settings", {}),
-                                              acc.get("campaigns", []), backfill_days=7, now=now)
+                                              acc.get("campaigns", []), backfill_days=14, now=now)
         print(f"seeded {client['name']} ({len(client['accounts'])} accounts)")
     from demo_data import MEMORIES
     if reset:

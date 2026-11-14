@@ -46,6 +46,12 @@ DEFAULT_POLICIES = [
      "why": "The agent may only propose audience targeting changes."},
     {"_id": "approver-can-approve", "priority": 200, "roles": ["approver"], "actions": ["approve", "reject", "forget_memory"],
      "when": {}, "effect": "allow", "why": "Approvers decide on proposals and can correct the agent's memory."},
+    {"_id": "senior-can-approve-small", "priority": 205, "roles": ["senior"], "actions": ["approve", "reject"],
+     "when": {"change_usd_lte": 25}, "effect": "allow",
+     "why": "Senior strategists approve changes up to $25 a day. Bigger moves go to the agency owner."},
+    {"_id": "senior-operations", "priority": 208, "roles": ["senior"], "actions": ["set_budget", "set_targeting"],
+     "when": {"change_usd_lte": 25}, "effect": "allow",
+     "why": "Senior strategists carry out changes up to $25 a day."},
     {"_id": "approver-operations", "priority": 210, "roles": ["approver"],
      "actions": ["set_budget"],
      "when": {"change_pct_lte": 50}, "effect": "allow",
@@ -70,6 +76,9 @@ def _when_holds(when: dict, ctx: dict) -> bool:
     for key, val in (when or {}).items():
         if key == "change_pct_lte":
             if ctx.get("change_pct") is None or ctx["change_pct"] > val + 1e-9:
+                return False
+        elif key == "change_usd_lte":
+            if ctx.get("change_usd") is None or ctx["change_usd"] > val + 1e-9:
                 return False
         elif key == "new_budget_gt":
             if ctx.get("new_budget") is None or not ctx["new_budget"] > val:
@@ -115,6 +124,8 @@ def action_context(action: dict, campaign: dict | None, account: dict) -> dict:
         "campaign_id": (campaign or {}).get("campaign_id"), "account_id": account.get("_id"),
         "client_id": account.get("client_id"), "platform": account.get("platform"),
         "industry": account.get("industry"),
+        "change_usd": round(abs((new or 0) - (old or 0)), 2) if action["type"] == "set_budget"
+        else round(old or 0, 2) if action["type"] == "pause" and isinstance(old, (int, float)) else 0.0,
     }
 
 

@@ -63,3 +63,16 @@ def test_client_grant_only_applies_to_that_client():
     assert roles_for(owner, "harbour") == ["approver"]
     assert roles_for(owner, "brightsmile") == []
     assert evaluate(P, roles_for(owner, "brightsmile"), {"action_type": "approve"})[0] == "deny"
+
+
+def test_senior_dollar_limit():
+    small = {"action_type": "approve", "change_usd": 20}
+    big = {"action_type": "approve", "change_usd": 40}
+    assert evaluate(P, ["senior"], small)[0] == "allow"
+    assert evaluate(P, ["senior"], big)[0] == "deny"
+    assert evaluate(P, ["approver"], big)[0] == "allow"
+
+
+def test_junior_and_client_cannot_approve():
+    for roles in (["junior"], ["client"], ["viewer"]):
+        assert evaluate(P, roles, {"action_type": "approve", "change_usd": 1})[0] == "deny"
