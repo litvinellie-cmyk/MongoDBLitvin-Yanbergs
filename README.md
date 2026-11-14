@@ -8,6 +8,18 @@ Track 1, Agents You Can Audit. Agents in Context Toronto, MongoDB hackathon, Nov
 
 An agent manages ad budgets for an agency with many clients, across Facebook + Instagram, Google Ads, TikTok and Reddit Ads, with Shopify connected as a read only sales source. It moves money between campaigns based on cost per lead. Every action it takes is tied to an identity, checked against a policy stored in MongoDB Atlas before it runs, verified against the ad platform afterwards, and written to an audit trail a reviewer can replay. A human can halt it mid run or undo any change.
 
+## Real actions on a second system: GitHub Issues
+
+The ad accounts are simulated so no real money moves, but the approval workflow runs on **real GitHub**:
+
+| Event | Real action | Who | Policy |
+|---|---|---|---|
+| Agent needs a person (budget change or pause) | Opens an issue with the reason and evidence | `agent:budget-bot` | `bots-open-tickets` |
+| Staff approve or reject | Comments with their reason and closes the issue (completed or not planned) | `user:ellie`, `user:maya` | `staff-close-tickets` |
+| Circuit breaker halts a client | Opens an incident issue | `agent:circuit-breaker` | `bots-open-tickets` |
+
+Every GitHub action goes through the same gate (identity, policy), is verified by re-reading the issue, and is recorded in `audit_events`. Tickets open and close in the background so GitHub never slows the agent. Set `GITHUB_TOKEN` and `GITHUB_REPO` in `.env` (never committed); without them this is skipped. `reset-demo` closes old agent tickets.
+
 ## The three Track 1 questions
 
 | Question | How this answers it |

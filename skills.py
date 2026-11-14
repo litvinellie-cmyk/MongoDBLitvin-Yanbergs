@@ -341,6 +341,8 @@ def run(db, platforms, run_id: str, counts: dict) -> None:
                 "run_id": run_id, "status": "pending", "created_at": now, "expires_at": now + timedelta(hours=48)})
             if gate.run_cache() is not None:
                 gate.run_cache()["open"].add(camp["_id"])
+            import tickets
+            tickets.open_for_proposal(db, db.proposals.find_one({"action_id": out["action_id"]}))
             counts["proposed"] += 1
     # 3. search terms: negatives for terms that cost money and never convert
     for t in db.search_terms.find({"status": "active", "conversions": 0, "cost_7d": {"$gte": 30}}):

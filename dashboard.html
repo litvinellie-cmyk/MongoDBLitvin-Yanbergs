@@ -298,9 +298,11 @@ function eventLine(e) {
   switch (e.event) {
     case "policy_check":
       return `${badge(e.effect)} ${who} ${esc(e.action_type)} ${esc(e.campaign_id || "")}${act}<div class="muted">${esc(e.policy_id)}: ${esc(e.why)}</div>`;
-    case "action_sent": return `<span class="badge info">SENT</span> ${who} ${esc(e.action.type)} ${esc(e.campaign_id)}${act}`;
+    case "action_sent": if (e.system === "github") return `<span class="badge info">GITHUB</span> ${who} ${esc(e.action.type.replace("_", " "))} ${esc(e.campaign_id || e.client_id || "")}${act}`;
+      return `<span class="badge info">SENT</span> ${who} ${esc(e.action.type)} ${esc(e.campaign_id)}${act}`;
     case "action_result": {
       const r = e.result || {};
+      if (e.system === "github") return `${r.ok && r.verified ? '<span class="badge allow">VERIFIED ON GITHUB</span>' : '<span class="badge deny">GITHUB FAILED</span>'} ${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">#${r.number || ""}</a>` : ""} <span class="muted">${esc(r.ok ? "issue " + (r.observed && r.observed.state) : r.error)}</span>`;
       const tag = !r.ok ? '<span class="badge deny">FAILED</span>' : r.verified ? '<span class="badge allow">VERIFIED</span>' : '<span class="badge pending">UNVERIFIED</span>';
       return `${tag} ${esc(e.campaign_id)}${act}<div class="muted">${r.ok ? "platform now shows " + esc(JSON.stringify(r.observed)) : esc(r.error)}</div>`;
     }
@@ -339,7 +341,7 @@ function render() {
   }).join(""));
   const be = (S.breaker_events || [])[0];
   setHTML("banner", be && (S.halted_global || S.halted_clients.includes(be.client_id)) ?
-    `<div class="alert"><b>Circuit breaker stopped ${esc((S.clients.find((c) => c._id === be.client_id) || {}).name || be.client_id)} at ${t(be.at)}</b>${esc(be.reason)} Only a human can resume it.</div>` : "");
+    `<div class="alert"><b>Circuit breaker stopped ${esc((S.clients.find((c) => c._id === be.client_id) || {}).name || be.client_id)} at ${t(be.at)}</b>${esc(be.reason)} Only a human can resume it.${S.incidents && S.incidents[be.client_id] ? ` <a href="${esc(S.incidents[be.client_id].url)}" target="_blank" rel="noopener">Incident ticket on GitHub #${S.incidents[be.client_id].number}</a>` : ""}</div>` : "");
   setHTML("mems", "<tr><th>When</th><th>Client</th><th>Past decision</th><th>Result</th><th></th></tr>" +
     ((S.memories || []).map((m) => `<tr><td class="muted">${new Date(m.created_at).toLocaleDateString()}</td>
       <td>${esc((S.clients.find((c) => c._id === m.client_id) || {}).name || m.client_id)}</td>
@@ -373,7 +375,7 @@ function render() {
         <div class="muted">${p.reason.memory.hits.map((h) => esc(h.text)).join("<br>")}</div></div>` : ""}
       ${p.policy_why ? `<div class="muted" style="margin-top:6px">Why a human: ${esc(p.policy_why)}</div>` : ""}
       ${evidenceHTML(p.reason.evidence)}
-      <div class="row" style="margin-top:8px"><span class="muted">asked by ${esc(p.requested_by)} · <button class="link" data-explain="${esc(p.action_id)}">${esc(p.action_id)}</button></span>
+      <div class="row" style="margin-top:8px"><span class="muted">asked by ${esc(p.requested_by)} · <button class="link" data-explain="${esc(p.action_id)}">${esc(p.action_id)}</button>${p.ticket ? ` · <a href="${esc(p.ticket.url)}" target="_blank" rel="noopener">GitHub #${p.ticket.number}</a>` : ""}</span>
       <span><button data-decide="reject" data-id="${esc(p._id)}">Reject</button> <button class="ok" data-decide="approve" data-id="${esc(p._id)}">Approve</button></span></div>
     </div>`).join("") : '<div class="empty">Nothing waiting.</div>');
 

@@ -78,6 +78,8 @@ def decide_proposal(db, platforms, pid, decision: str, actor_id: str, comment: s
     )
     if not r.modified_count:
         return {"ok": False, "error": "someone else decided first"}
+    import tickets
+    tickets.close_for_proposal(db, p, decision, actor_id, comment)
     gate.audit(db, f"proposal_{status}", actor_id=actor_id, action_id=p.get("action_id"),
                proposal_id=str(p["_id"]), campaign_id=p["campaign_id"], policy_id=policy_id,
                client_id=p.get("client_id"), comment=comment)

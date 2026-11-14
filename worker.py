@@ -21,6 +21,7 @@ import evidence
 import growth
 import memory
 import ops
+import tickets
 from rules import decide, decide_targeting, merged_settings
 from store import campaign_stats, day_str, get_db, measure_outcomes
 
@@ -53,6 +54,8 @@ def check_pace(db, account, live, budget_total, s, now, run_id) -> bool:
                numbers={"spent_today": round(spent, 2), "expected": round(expected, 2),
                         "ratio": round(ratio, 2), "limit": s["pace_limit"]})
     out = ops.set_halt(db, BREAKER_ID, True, "Circuit breaker: " + reason, account.get("client_id"))
+    if out.get("ok"):
+        tickets.open_incident(db, BREAKER_ID, account.get("client_id"), reason)
     print(f"[circuit breaker] {reason} -> {out}")
     return bool(out.get("ok"))
 
@@ -110,6 +113,7 @@ def act(db, platform, account, camp, a, s, now, run_id, counts, ev=None):
             "expires_at": now + timedelta(hours=s["proposal_ttl_hours"]),
         })
         gate.run_cache()["open"].add(cid)
+        tickets.open_for_proposal(db, db.proposals.find_one({"action_id": out["action_id"]}))
         gate.audit(db, "proposal_created", actor_id=gate.AGENT_ID, action_id=out["action_id"],
                    client_id=client_id, run_id=run_id, campaign_id=cid, policy_id=out["policy_id"])
         counts["proposed"] += 1
@@ -135,7 +139,7 @@ def _preload(db, now) -> dict:
     for c in db.change_log.find({"result.ok": True, "applied_at": {"$gte": now - timedelta(days=2)}},
                                 {"campaign_id": 1, "applied_at": 1}):
         edits.setdefault(c["campaign_id"], []).append(c["applied_at"])
-    return {"open": open_ids, "denied": denied, "checked": checked, "edits": edits}
+    return {"open": open_ids, "open_at_start": set(open_ids), "denied": denied, "checked": checked, "edits": edits}
 
 
 def _edit_history(cid, now):
@@ -215,8 +219,8 @@ def _run_once(db, platforms, now) -> dict:
                 counts["halted_accounts"] = counts.get("halted_accounts", 0) + 1
                 break
             cid = stats["campaign_id"]
-            if cid not in live_by_id:
-                continue
+            if cid not in live_by_id or cid in gate.run_cache()["open_at_start"]:
+                continue  # already waiting for a person from an earlier run
             # Valid data only: never act on stale numbers.
             if stats.get("last_ts") and now - stats["last_ts"] > timedelta(hours=6):
                 gate.audit(db, "data_quality_hold", actor_id=gate.AGENT_ID, run_id=run_id, client_id=client_id,
@@ -257,6 +261,9 @@ def _run_once(db, platforms, now) -> dict:
 def seed(db, platforms, reset=False):
     from demo_data import CLIENTS
     if reset:  # demo only: wipes the demo collections
+        closed = tickets.close_all_open("Demo reset: closing old agent tickets.")
+        if closed:
+            print(f"closed {closed} old GitHub tickets")
         db.policies.delete_many({"_id": {"$regex": "^custom-"}})
         db.clients.delete_many({})
         for coll in ("proposals", "change_log", "audit_events", "runs", "controls", "clients", "policy_versions", "goals", "plans",

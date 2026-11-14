@@ -111,7 +111,7 @@ def check(db, actor_id: str, ctx: dict, *, action_id: str | None = None,
     """Identity + kill switch + policy. Always writes a policy_check audit event."""
     actor = get_actor(db, actor_id)
     stop = (halt_state_cached(db, ctx.get("account_id"), ctx.get("client_id"))
-            if ctx["action_type"] not in ("halt", "unhalt") else None)
+            if ctx["action_type"] not in ("halt", "unhalt", "open_ticket", "close_ticket") else None)
     roles = roles_for(actor, ctx.get("client_id")) if actor else []
     if not actor:
         effect, pid, why = "deny", "unknown-actor", f"{actor_id} is not an active actor."

@@ -79,6 +79,8 @@ def state(client: str = "all") -> dict:
         "halted_global": "global" in halts,
         "halted_client": client != "all" and f"client:{client}" in halts,
         "halted_clients": [k.split(":", 1)[1] for k in halts if k.startswith("client:")],
+        "incidents": {k.split(":", 1)[1]: c["incident"] for k, c in halts.items()
+                      if k.startswith("client:") and c.get("incident")},
         "actors": list(DB.actors.find({}, {"name": 1, "roles": 1, "kind": 1, "grants": 1})),
         "campaigns": campaigns, "connections": connections,
         "proposals": list(DB.proposals.find({"status": "pending", **scoped}).sort("created_at", 1)),
