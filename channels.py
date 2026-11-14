@@ -170,7 +170,7 @@ def competitors(db, client_id: str) -> dict:
     bidder = BRAND_BIDDERS.get(client_id)
     return {"ads": ads, "new_this_week": new, "long_running": winners, "offers": offers,
             "brand_bidder": bidder,
-            "summary": (f"{len(new)} new competitor ads this week. {len(winners)} have run 30+ days, "
+            "summary": (f"{len(new)} new competitor ad{'' if len(new) == 1 else 's'} this week. {len(winners)} have run 30+ days, "
                         f"which usually means they work." + (f" {bidder} is bidding on your brand name in Google."
                                                             if bidder else "")),
             "as_of": now}
@@ -253,12 +253,12 @@ def tracking_health(db, client_id: str) -> list[dict]:
         ver = sum(r.get("conversions") or 0 for r in st)
         checks, status = [], "ok"
         gap = (rep - ver) / ver * 100 if ver else None
-        if gap is not None and gap > 35:
+        if gap is not None and gap > 25:
             status = "warning"
             checks.append(f"Platform reports {rep} conversions vs {ver} verified ({gap:+.0f}%). Check deduplication "
                           f"and the Conversions API.")
         else:
-            checks.append(f"Platform vs verified conversions within range ({rep} vs {ver}).")
+            checks.append(f"Platform vs verified conversions within 25% ({rep} vs {ver}).")
         if acc["_id"] == "northside-google":
             status = "problem"
             checks.append("Ad 'buyer-search' points to /listings/spring-2026, which returns 404. Money is going to a dead page.")

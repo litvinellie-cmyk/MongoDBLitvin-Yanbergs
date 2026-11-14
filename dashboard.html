@@ -339,7 +339,7 @@ function render() {
       <td>${esc(c.action.type)} ${c.action.type === "set_budget" ? money(c.action.old) + " → " + money(c.action.new) : c.action.type === "set_targeting" ? "ages " + c.action.new.age_min + " to " + c.action.new.age_max : c.action.label ? esc(c.action.label) : ""}${c.reverts ? ' <span class="tag">undo</span>' : ""}</td>
       <td>${esc(c.actor_id)}<div class="muted">${esc(c.mode)}${c.approval ? ", approved by " + esc(c.approval.approved_by) + (c.approval.comment ? ': "' + esc(c.approval.comment) + '"' : "") : ""}</div></td>
       <td>${c.result.ok ? (c.result.verified ? badge("allow").replace("ALLOW", "VERIFIED") : '<span class="badge pending">UNVERIFIED</span>') : badge("deny").replace("DENY", "FAILED")}</td>
-      <td><button class="link" data-explain="${esc(c.action_id)}">explain</button>${c.result.ok && !c.reverts ? ` · <button class="link" data-undo="${esc(c._id)}">undo</button>` : ""}</td></tr>`).join("") ||
+      <td><button class="link" data-explain="${esc(c.action_id)}">explain</button>${c.result.ok && !c.reverts && !c.undone ? ` · <button class="link" data-undo="${esc(c._id)}">undo</button>` : c.undone ? ' <span class="tag">undone</span>' : ""}</td></tr>`).join("") ||
       '<tr><td colspan="6" class="empty">No changes yet.</td></tr>'));
 
   setHTML("pols", "<tr><th>#</th><th>Policy</th><th>Roles</th><th>Actions</th><th>Effect</th></tr>" +
@@ -561,7 +561,10 @@ $("tmSlider").oninput = () => { if (!TMB) return; TM_T = tmFromSlider(); $("tmTi
 $("client").onchange = () => { CLIENT = $("client").value; try { localStorage.setItem("client", CLIENT); } catch (e) {} load(); };
 $("actor").onchange = () => { try { localStorage.setItem("actor", $("actor").value); } catch (e) {} };
 $("dlgClose").onclick = () => $("dlg").close();
-load(); setInterval(() => { if (!$("dlg").open) load(); }, 3000);
+// Refresh after the previous refresh finishes, so slow networks never pile up requests.
+let LOADING = false;
+async function safeLoad() { if (LOADING || $("dlg").open) return; LOADING = true; try { await load(); } catch (e) {} finally { LOADING = false; } }
+(async function poll() { await safeLoad(); setTimeout(poll, 4000); })();
 </script>
 </body>
 </html>

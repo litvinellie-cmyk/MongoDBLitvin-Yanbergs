@@ -42,11 +42,17 @@ def state(client: str = "all") -> dict:
     acc_ids = [a["_id"] for a in accounts]
     now = utcnow()
     campaigns = []
+    settings = {d["_id"]: merged_settings(d) for d in DB.settings.find({"_id": {"$in": acc_ids}})}
+    window = merged_settings(None)["window_days"]
+    stats_all = {r["campaign_id"]: r for r in campaign_stats(
+        DB, acc_ids, day_str(now - timedelta(days=window - 1)), day_str(now))}
+    camps_by_acc = {}
+    for c in DB.sandbox_campaigns.find({"account_id": {"$in": acc_ids}}).sort("_id", 1):
+        camps_by_acc.setdefault(c["account_id"], []).append(c)
     for acc in accounts:
-        s = merged_settings(DB.settings.find_one({"_id": acc["_id"]}))
-        stats = {r["campaign_id"]: r for r in campaign_stats(
-            DB, acc["_id"], day_str(now - timedelta(days=s["window_days"] - 1)), day_str(now))}
-        for c in DB.sandbox_campaigns.find({"account_id": acc["_id"]}).sort("_id", 1):
+        s = settings.get(acc["_id"]) or merged_settings(None)
+        stats = stats_all
+        for c in camps_by_acc.get(acc["_id"], []):
             st = stats.get(c["_id"], {})
             conv = st.get("conversions", 0)
             k = kpis(st) if st else kpis({})
@@ -74,23 +80,33 @@ def state(client: str = "all") -> dict:
         "actors": list(DB.actors.find({}, {"name": 1, "roles": 1, "kind": 1, "grants": 1})),
         "campaigns": campaigns, "connections": connections,
         "proposals": list(DB.proposals.find({"status": "pending", **scoped}).sort("created_at", 1)),
-        "changes": list(DB.change_log.find(
-            {} if client == "all" else {"account_id": {"$in": acc_ids}}).sort("applied_at", -1).limit(20)),
+        "changes": mark_undone(list(DB.change_log.find(
+            {} if client == "all" else {"account_id": {"$in": acc_ids}}).sort("applied_at", -1).limit(20))),
         "events": list(DB.audit_events.find(ev_q).sort([("at", -1), ("_id", -1)]).limit(80)),
         "policies": list(DB.policies.find().sort("priority", 1)),
         "accuracy": accuracy(scoped),
         "memories": list(DB.memories.find(scoped, {"embedding": 0}).sort("created_at", -1).limit(30)),
         "breaker_events": list(DB.audit_events.find({"event": "circuit_breaker", **scoped})
                                .sort("at", -1).limit(3)),
-        "pending_by_client": {c["_id"]: DB.proposals.count_documents({"status": "pending", "client_id": c["_id"]})
-                              for c in clients},
+        "pending_by_client": {r["_id"]: r["n"] for r in DB.proposals.aggregate([
+            {"$match": {"status": "pending"}}, {"$group": {"_id": "$client_id", "n": {"$sum": 1}}}])},
     }
+
+
+def mark_undone(changes: list[dict]) -> list[dict]:
+    ids = [str(c["_id"]) for c in changes]
+    undone = {c["reverts"] for c in DB.change_log.find({"reverts": {"$in": ids}, "result.ok": True}, {"reverts": 1})}
+    for c in changes:
+        c["undone"] = str(c["_id"]) in undone
+    return changes
 
 
 def accuracy(scoped: dict) -> dict:
     """How often past agent decisions improved results (from measured outcomes)."""
-    better = DB.memories.count_documents({**scoped, "verdict": "better"})
-    worse = DB.memories.count_documents({**scoped, "verdict": "worse"})
+    counts = {r["_id"]: r["n"] for r in DB.memories.aggregate([
+        {"$match": {**scoped, "verdict": {"$in": ["better", "worse"]}}},
+        {"$group": {"_id": "$verdict", "n": {"$sum": 1}}}])}
+    better, worse = counts.get("better", 0), counts.get("worse", 0)
     n = better + worse
     return {"better": better, "worse": worse, "pct": round(better / n * 100) if n else None}
 

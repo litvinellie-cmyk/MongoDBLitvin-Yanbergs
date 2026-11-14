@@ -32,14 +32,16 @@ def day_str(dt: datetime) -> str:
     return dt.date().isoformat()
 
 
-def campaign_stats(db, account_id: str, first_day: str, last_day: str,
+def campaign_stats(db, account_id, first_day: str, last_day: str,
                    campaign_id: str | None = None) -> list[dict]:
     """Totals per campaign over [first_day, last_day].
 
     Snapshots hold day to date totals, so take the last snapshot of each day
     and then add the days together.
     """
-    match = {"meta.account_id": account_id, "day": {"$gte": first_day, "$lte": last_day}}
+    # account_id may be one id or a list of ids (one round trip for many accounts)
+    acc = {"$in": list(account_id)} if isinstance(account_id, (list, tuple, set)) else account_id
+    match = {"meta.account_id": acc, "day": {"$gte": first_day, "$lte": last_day}}
     if campaign_id:
         match["meta.campaign_id"] = campaign_id
     pipeline = [
