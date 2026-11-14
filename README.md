@@ -37,6 +37,21 @@ Demo clients (all made up): Harbour Coffee Co. (FB + IG, TikTok, Reddit, Shopify
 
 Clients never approve anything. Only agency staff do.
 
+## Channels beyond ads
+
+Each client has a **Channels** section with six tabs (simulated data in the demo):
+
+| Tab | What it shows | Real source |
+|---|---|---|
+| AI search (AEO/GEO) | Share of ChatGPT, Perplexity, Gemini, Google AI Overview and Claude answers that mention the client, vs last week and vs competitors; a question by engine grid; the sites AI cites most; wrong information alerts (for example old opening hours) | Daily prompts to each engine |
+| Competitors | Rival ads with type, platform and days running, new ads this week, likely winners (30+ days), and brand bidding alerts | Meta Ad Library, Google Ads Transparency Center |
+| SEO vs paid | Keywords where the client already ranks #1 or #2 organically but still pays; weekly savings estimate. The agent proposes pausing them, through the normal approval queue | Search Console + Google Ads |
+| Reviews | New reviews with drafted replies. Replies are public, so they always need a person on the agency team, and can't be undone automatically | Google Business Profile |
+| Creative check | Each draft ad checked for risky claims (guarantees, superlatives), health claims, housing ad wording (Fair Housing), and the client's banned brand words | Rules library |
+| Tracking health | Platform vs verified conversions, pixel events that stopped firing, ads pointing to broken pages | Pixel, Conversions API, URL checks |
+
+Keyword pauses and review replies use the same gate, approval roles, verification and audit trail as budget changes.
+
 ## Three problems agencies actually have
 
 | Problem | What the agent does | MongoDB feature |
@@ -56,7 +71,8 @@ Clients never approve anything. Only agency staff do.
 6. **Resume**, then **undo** the "pricey" change. The budget goes back to $160, with the undo linked to the original change.
 7. On Harbour, show the TikTok "ugc-videos" card: **Memory changed this decision**, because 3 similar TikTok increases made things worse.
 8. Click **Client report** to show what the client sees: plain language, no jargon.
-9. Switch to **Northside Realty**: the agent's age targeting was **denied** by the housing ad rules. Click **Simulate spend spike**: the circuit breaker halts Northside on its own, with a red banner explaining why.
+9. Open **Channels**: AI search visibility, the competitor ads, the blocked "Perfect for young families" housing ad in Creative check.
+10. Switch to **Northside Realty**: the agent's age targeting was **denied** by the housing ad rules. Click **Simulate spend spike**: the circuit breaker halts Northside on its own, with a red banner explaining why.
 
 ## How it fits together
 

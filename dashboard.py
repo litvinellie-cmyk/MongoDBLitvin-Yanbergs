@@ -108,6 +108,20 @@ def export_csv(client: str) -> bytes:
     return buf.getvalue().encode()
 
 
+def channels_state(cid: str) -> dict:
+    import channels
+    if cid == "all":
+        return {"needs_client": True}
+    client = DB.clients.find_one({"_id": cid}) or {}
+    revs = list(DB.reviews.find({"client_id": cid}).sort("at", -1))
+    for r in revs:
+        r["_id"] = str(r["_id"])
+    return {"competitors": channels.competitors(DB, cid), "ai": channels.ai_visibility(DB, cid),
+            "seo": channels.seo_overlap(DB, cid), "reviews": revs,
+            "creatives": channels.creatives(DB, cid, client.get("industry", "")),
+            "tracking": channels.tracking_health(DB, cid)}
+
+
 def spike(client_id):
     """Demo: one campaign starts burning money 4x faster, then the agent runs."""
     if not client_id:
@@ -151,6 +165,9 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(export_csv(cid))
             return
+        if u.path == "/api/channels":
+            cid = parse_qs(u.query).get("client", ["all"])[0]
+            return self._send(200, channels_state(cid))
         if u.path == "/api/explain":
             aid = parse_qs(u.query).get("id", [""])[0]
             return self._send(200, ops.explain(DB, aid))

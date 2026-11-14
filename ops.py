@@ -94,7 +94,10 @@ def execute_proposal(db, platforms, pid) -> dict:
     account = db.accounts.find_one({"_id": p["account_id"]})
     platform = platform_for(platforms, account)
     a = p["action"]
-    live = _live_campaign(platform, account, p["campaign_id"])
+    if a["type"] in gate.ITEM_ACTIONS:
+        live = {"campaign_id": p["campaign_id"], "tags": [], "status": "ACTIVE"}
+    else:
+        live = _live_campaign(platform, account, p["campaign_id"])
     if not live or live["status"] != "ACTIVE" or (
         a["type"] == "set_budget" and abs(live["daily_budget"] - a["old"]) > 0.01
     ):
@@ -128,6 +131,16 @@ def undo(db, platforms, change_id, actor_id: str) -> dict:
         return {"ok": False, "error": "already undone"}
     account = db.accounts.find_one({"_id": ch["account_id"]})
     platform = platform_for(platforms, account)
+    a = ch["action"]
+    if a["type"] == "reply_review":
+        return {"ok": False, "error": "A public review reply can't be taken back automatically. Edit it on the platform."}
+    if a["type"] in gate.ITEM_ACTIONS:
+        reverse = {"type": "resume_keyword" if a["type"] == "pause_keyword" else "pause_keyword",
+                   "field": "status", "old": a["new"], "new": a["old"], "label": a.get("label")}
+        reason = {"text": f"Undo of change {ch['_id']} ({ch['reason']['text']})", "numbers": {"reverts": str(ch["_id"])}}
+        out = gate.attempt(db, platform, account, {"campaign_id": ch["campaign_id"], "tags": []}, reverse, reason,
+                           actor_id=actor_id, mode="rollback", reverts=str(ch["_id"]))
+        return {"ok": out["effect"] == "allow" and out["result"]["ok"], **out}
     live = _live_campaign(platform, account, ch["campaign_id"])
     if not live:
         return {"ok": False, "error": "campaign no longer exists"}

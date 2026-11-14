@@ -78,7 +78,38 @@ class SandboxPlatform(Platform):
     name = "sandbox"
 
     def __init__(self, db):
+        self.db = db
         self.col = db.sandbox_campaigns
+
+    # Items that aren't campaigns: paid keywords and customer reviews.
+    def _item(self, target):
+        from bson import ObjectId
+        kind, _id = target.split(":", 1)
+        coll = {"keyword": self.db.seo_keywords, "review": self.db.reviews}[kind]
+        return coll, {"_id": ObjectId(_id)}
+
+    def pause_keyword(self, account, target):
+        coll, q = self._item(target)
+        if coll.update_one(q, {"$set": {"status": "PAUSED"}}).matched_count != 1:
+            raise RuntimeError(f"{target} not found")
+
+    def resume_keyword(self, account, target):
+        coll, q = self._item(target)
+        if coll.update_one(q, {"$set": {"status": "ACTIVE"}}).matched_count != 1:
+            raise RuntimeError(f"{target} not found")
+
+    def reply_review(self, account, target, text):
+        coll, q = self._item(target)
+        if coll.update_one(q, {"$set": {"reply": text, "replied_at": utcnow()}}).matched_count != 1:
+            raise RuntimeError(f"{target} not found")
+
+    def verify_item(self, target, action):
+        coll, q = self._item(target)
+        doc = coll.find_one(q) or {}
+        if action["type"] == "reply_review":
+            return doc.get("reply") == action["new"], {"reply_posted": bool(doc.get("reply"))}
+        want = "PAUSED" if action["type"] == "pause_keyword" else "ACTIVE"
+        return doc.get("status") == want, {"status": doc.get("status")}
 
     @staticmethod
     def _today_totals(c: dict, day: str, frac: float) -> dict:

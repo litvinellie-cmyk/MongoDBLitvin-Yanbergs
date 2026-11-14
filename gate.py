@@ -13,6 +13,7 @@ from platforms import utcnow
 from policy import action_context, evaluate, roles_for
 
 AGENT_ID = "agent:budget-bot"
+ITEM_ACTIONS = {"pause_keyword", "resume_keyword", "reply_review"}
 
 
 def new_action_id() -> str:
@@ -106,9 +107,18 @@ def perform(db, platform, account, campaign_id, action, reason, *, actor_id, act
             platform.resume(account, campaign_id)
         elif t == "set_targeting":
             platform.set_targeting(account, campaign_id, action["new"])
+        elif t == "pause_keyword":
+            platform.pause_keyword(account, campaign_id)
+        elif t == "resume_keyword":
+            platform.resume_keyword(account, campaign_id)
+        elif t == "reply_review":
+            platform.reply_review(account, campaign_id, action["new"])
         else:
             raise ValueError(f"unsupported action {t}")
-        verified, observed = _verify(platform, account, campaign_id, action)
+        if t in ITEM_ACTIONS:
+            verified, observed = platform.verify_item(campaign_id, action)
+        else:
+            verified, observed = _verify(platform, account, campaign_id, action)
         result = {"ok": True, "verified": verified, "observed": observed}
     except Exception as e:
         result = {"ok": False, "error": f"{type(e).__name__}: {e}"}

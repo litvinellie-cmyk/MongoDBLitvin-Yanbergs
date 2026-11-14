@@ -36,7 +36,8 @@ VALIDATED = {
             "status": {"enum": ["pending", "approved", "executing", "done", "failed",
                                 "rejected", "expired", "stale", "blocked"]},
             "action": {"bsonType": "object", "required": ["type"],
-                       "properties": {"type": {"enum": ["set_budget", "pause", "resume", "set_targeting"]}}},
+                       "properties": {"type": {"enum": ["set_budget", "pause", "resume", "set_targeting",
+                                                         "pause_keyword", "resume_keyword", "reply_review"]}}},
             "reason": {"bsonType": "object", "required": ["text", "numbers"]},
         },
     },
@@ -71,7 +72,8 @@ VALIDATED = {
         "properties": {"event": {"bsonType": "string"}, "at": {"bsonType": "date"}},
     },
 }
-PLAIN = ["clients", "memories", "leads", "brand_docs", "sandbox_campaigns", "controls", "runs"]
+PLAIN = ["clients", "memories", "competitor_ads", "ai_visibility", "seo_keywords", "reviews",
+         "creatives", "leads", "brand_docs", "sandbox_campaigns", "controls", "runs"]
 
 INDEXES = {
     "proposals": [([("client_id", 1), ("status", 1), ("created_at", -1)], {}),
