@@ -24,6 +24,7 @@ h1 { font-size: 17px; margin: 0; }
 h1 small { color: var(--muted); font-weight: 400; margin-left: 8px; }
 h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; }
 .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+select { max-width: 100%; }
 select, button { font: inherit; border-radius: 8px; border: 1px solid var(--line); background: var(--panel);
   color: var(--ink); padding: 6px 10px; cursor: pointer; }
 button:hover { border-color: var(--muted); }
@@ -41,7 +42,7 @@ table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
 th { color: var(--muted); font-weight: 500; font-size: 12px; }
 td.num { font-variant-numeric: tabular-nums; }
-.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr)); gap: 10px; margin-bottom: 12px; }
 .ccard { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; cursor: pointer; }
 .ccard:hover { border-color: var(--muted); }
 .ccard b { display: block; }
@@ -131,7 +132,8 @@ const setHTML = (id, html) => { const el = $(id); if (el._last !== html) { el.in
 try { $("actor").dataset.saved = localStorage.getItem("actor") || ""; } catch (e) {}
 let CLIENT = "all";
 try { CLIENT = localStorage.getItem("client") || "all"; } catch (e) {}
-const plat = (p, label) => `<span class="plat p-${esc(p)}">${esc(label || p)}</span>`;
+const PL = {meta: "FB + IG", google: "Google", tiktok: "TikTok", reddit: "Reddit", shopify: "Shopify", sandbox: "Sandbox"};
+const plat = (p, label) => `<span class="plat p-${esc(p)}">${esc(label || PL[p] || p)}</span>`;
 
 function toast(msg, ok) {
   const el = $("toast");
