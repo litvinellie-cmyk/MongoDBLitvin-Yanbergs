@@ -120,12 +120,13 @@ def render(db, client_id: str, days: int = 7) -> str:
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{html.escape(client['name'])} Weekly Report</title>
 <style>
-:root {{ --ink:#1d1d1f; --muted:#6b6b70; --line:#e4e2dc; --bg:#f6f5f2; --panel:#fff; --accent:#1f4fa3; }}
-@media (prefers-color-scheme: dark) {{ :root {{ --ink:#ececee; --muted:#9a9aa2; --line:#2e2e33; --bg:#141416; --panel:#1d1d20; --accent:#8fb0ff; }} }}
+:root {{ --ink:#001e2b; --muted:#5c6c75; --line:#e8edeb; --bg:#f9fbfa; --panel:#fff; --accent:#00684a; --brand:#00ed64; }}
+@media (prefers-color-scheme: dark) {{ :root {{ --ink:#e8edeb; --muted:#889397; --line:#1c2d38; --bg:#001e2b; --panel:#112733; --accent:#00ed64; --brand:#00ed64; color-scheme: dark; }} }}
 * {{ box-sizing:border-box; }} body {{ margin:0; background:var(--bg); color:var(--ink);
   font:16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }}
 .wrap {{ max-width:760px; margin:0 auto; padding:28px 16px 60px; }}
-h1 {{ font-size:26px; margin:0; }} .sub {{ color:var(--muted); margin:4px 0 22px; }}
+h1 {{ font-size:26px; margin:0; display:flex; align-items:center; gap:10px; }}
+h1::before {{ content:""; width:10px; height:26px; border-radius:3px; background:var(--brand); }} .sub {{ color:var(--muted); margin:4px 0 22px; }}
 .card {{ background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px 20px; margin-bottom:16px; }}
 .big {{ font-size:19px; font-weight:500; }}
 h2 {{ font-size:14px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:0 0 12px; }}
@@ -136,7 +137,7 @@ h2 {{ font-size:14px; text-transform:uppercase; letter-spacing:.06em; color:var(
 .fill {{ height:100%; background:var(--accent); border-radius:6px; }}
 .nums {{ color:var(--muted); font-size:14px; }}
 .light {{ font-size:12px; padding:2px 8px; border-radius:999px; font-weight:600; }}
-.green {{ background:#e3f3ea; color:#1f7a4d; }} .yellow {{ background:#fbf0d9; color:#8a5a00; }} .red {{ background:#fde8e6; color:#b42318; }}
+.green {{ background:#e3fcf7; color:#00684a; }} .yellow {{ background:#fbf0d9; color:#8a5a00; }} .red {{ background:#fde8e6; color:#b42318; }}
 ul {{ margin:0; padding-left:20px; }} li {{ margin-bottom:8px; }} .when {{ color:var(--muted); font-size:13px; margin-right:6px; }}
 .print {{ float:right; font:inherit; font-size:14px; padding:6px 12px; border-radius:8px; border:1px solid var(--line); background:var(--panel); color:var(--ink); cursor:pointer; }}
 @media print {{ .print {{ display:none; }} body {{ background:#fff; }} }}
