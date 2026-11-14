@@ -156,7 +156,8 @@ ol { margin: 6px 0 0; padding-left: 22px; max-width: 65ch; } li { margin-bottom:
       <a href="https://github.com/litvinellie-cmyk/MongoDBLitvin-Yanbergs">GitHub repository</a>
       <a href="https://github.com/litvinellie-cmyk/MongoDBLitvin-Yanbergs/issues?q=is%3Aissue+%5BAgent%5D">Live approval tickets</a>
     </div>
-    <p style="margin-top:12px"><b>Real actions on a second system:</b> every request that needs a person opens a real GitHub issue, every decision comments on it and closes it, and the circuit breaker opens an incident issue. Each goes through the same policy gate, is verified on GitHub, and is recorded in Atlas.</p>
+    <p style="margin-top:12px"><b>The agent is the product, not a dashboard:</b> it runs headless, and people approve by commenting <code>/approve</code> or <code>/reject</code> on the GitHub ticket. The same policy gate checks their role before the agent acts.</p>
+    <p><b>Real actions on a second system:</b> every request that needs a person opens a real GitHub issue, every decision comments on it and closes it, and the circuit breaker opens an incident issue. Each goes through the same policy gate, is verified on GitHub, and is recorded in Atlas.</p>
     <p>Ad accounts in the demo run on simulated data, so no real money moves. The prospect site audit is live. Real Meta, Google, TikTok and Reddit adapters have their API calls documented in the code.</p>
   </section>
 

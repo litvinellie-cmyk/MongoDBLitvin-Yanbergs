@@ -16,7 +16,7 @@ DEMO_ACTORS = [
     {"_id": gate.AGENT_ID, "kind": "agent", "name": "Budget bot", "roles": ["agent"], "active": True},
     # Agency staff. Only the agency approves; clients only read their reports.
     {"_id": "user:ellie", "kind": "human", "name": "Ellie (agency owner)", "roles": ["approver", "admin"],
-     "grants": [], "active": True},
+     "grants": [], "active": True, "github_login": "litvinellie-cmyk"},
     {"_id": "user:maya", "kind": "human", "name": "Maya (senior strategist, up to $25/day)",
      "roles": ["senior"], "grants": [], "active": True},
     {"_id": "user:alex", "kind": "human", "name": "Alex (junior, cannot approve)", "roles": ["junior"],

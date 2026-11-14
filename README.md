@@ -8,6 +8,12 @@ Track 1, Agents You Can Audit. Agents in Context Toronto, MongoDB hackathon, Nov
 
 An agent manages ad budgets for an agency with many clients, across Facebook + Instagram, Google Ads, TikTok and Reddit Ads, with Shopify connected as a read only sales source. It moves money between campaigns based on cost per lead. Every action it takes is tied to an identity, checked against a policy stored in MongoDB Atlas before it runs, verified against the ad platform afterwards, and written to an audit trail a reviewer can replay. A human can halt it mid run or undo any change.
 
+## The agent is the product, not the dashboard
+
+The agent runs headless: `python worker.py once` (or `loop`) pulls data, decides, asks Atlas for policy, acts or opens a ticket, verifies and audits, with no UI involved. People approve where they already work: comment `/approve reason` or `/reject reason` on the GitHub ticket, and the agent maps the GitHub account to a team member, applies the same policy (owner, senior limits, junior denied), carries it out through the gate, verifies it and closes the ticket. The dashboard is one optional window onto the same Atlas records.
+
+**Submit:** https://cerebralvalley.ai/events/~/e/mongodb-toronto-hackathon/hackathon/submit
+
 ## Built during the hackathon
 
 Everything in this repository was written on **November 14, 2026, during Agents in Context Toronto** (hacking started 10:45 AM). The commit history shows it: the first code commit is at 11:49 AM and every feature after it is its own commit that day. No earlier project, template or starter code was used.
@@ -130,6 +136,20 @@ Keyword pauses and review replies use the same gate, approval roles, verificatio
 | **Runaway spend.** A bug or bad bid burns a month of budget overnight. | **Circuit breaker:** when an account spends faster than 2x its expected pace for the hour, the breaker halts that client by itself and says why. Policy lets it halt, never resume: only a human restarts a client. | Policies as documents, audit trail |
 | **Ad law.** Housing ads can't target by age, gender or zip code (Special Ad Category). Health ads need review. One slip can get an ad account restricted. | **Compliance policies:** age targeting on a real estate client is denied for everyone, agency included. On a medical client it goes to a human compliance review. | Policies with `industry` conditions |
 | **Repeating mistakes.** Staff change, and nobody remembers that TikTok scaling backfired last month. | **Memory:** before acting, the agent recalls similar past moves for that client and their results. If most went badly, a policy sends the move to a human, so memory visibly changes behavior. Memories are scoped per client, expire after 180 days (TTL index), and can be forgotten by an approver, with the deletion logged. | Atlas Vector Search (`memories_vec`, with Voyage embeddings when `VOYAGE_API_KEY` is set), TTL index |
+
+## Live demo for judging (3 minutes)
+
+| Time | Show | Say |
+|---|---|---|
+| 0:00 | Terminal: `python worker.py once` | "This is an ad agent for agencies, built today on MongoDB Atlas. It runs headless. Every action passes a policy gate stored in Atlas before it runs." |
+| 0:30 | Output lines: applied, proposed by policy, denied by housing rule | "Small moves run alone, bigger ones need a person, illegal ones are blocked, each with the policy that decided it." |
+| 0:50 | GitHub: the open approval ticket | "Requests that need a person become real GitHub tickets with the evidence." |
+| 1:05 | Comment `/approve CPA too high` on the ticket | "I approve right here. The agent maps my GitHub account to my role, checks policy again, executes, verifies and closes the ticket." |
+| 1:30 | Dashboard: Explain on that change | "Atlas holds the whole chain: who asked, which rule, who approved, what the platform showed after." |
+| 1:50 | Acting as junior, Approve: denied | "Roles are enforced: a junior can't approve." |
+| 2:05 | Northside: Simulate spend spike | "If spend runs away, the circuit breaker halts that client itself and opens an incident ticket. Only a human can restart it." |
+| 2:30 | Memory card on ugc-videos, trust note | "It learns: past results change what it's allowed to do on its own." |
+| 2:45 | Play briefing (ElevenLabs) | "And it briefs you out loud." |
 
 ## Demo script (1 minute)
 

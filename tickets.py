@@ -98,8 +98,11 @@ def _open_for_proposal(db, proposal: dict) -> dict | None:
         lines += ["", "### Evidence", f"- {ev['confidence_text']}",
                   f"- Expected impact: {(ev.get('impact') or {}).get('summary', 'n/a')}",
                   f"- Risk: {ev.get('risk')}", f"- Tracking: {ev.get('tracking')}"]
-    lines += ["", f"Approval ID `{proposal.get('action_id')}`. Decide in the dashboard; this issue closes with the "
-                  f"decision and the approver's comment. Recorded in the MongoDB Atlas audit trail.",
+    lines += ["", "### Decide here or in the dashboard",
+              "Comment `/approve your reason` or `/reject your reason`. Your GitHub account must be linked to someone on "
+              "the agency team; the same rules apply as in the dashboard (owner approves anything, senior up to $25 a day, "
+              "junior can't). The agent carries it out, verifies it, and closes this issue.",
+              "", f"Approval ID `{proposal.get('action_id')}`. Recorded in the MongoDB Atlas audit trail.",
               "", "_Hackathon demo: ad accounts are simulated, this ticket is real._"]
     title = f"{PREFIX} Approval needed: {client} / {camp} ({'pause' if a['type'] == 'pause' else 'budget'})"
     res = _act(db, proposal["requested_by"], "open_ticket",
@@ -182,3 +185,67 @@ def close_all_open(note: str = "Demo reset.") -> int:
             except Exception:
                 pass
     return n
+
+
+# ---------------------------------------------------------------- decisions made on GitHub
+
+import re as _re
+
+COMMAND = _re.compile(r"^\s*/(approve|reject)\b\s*(.*)", _re.I | _re.S)
+
+
+def sync_github_decisions(db, platforms) -> list[dict]:
+    """Read /approve and /reject comments on open agent tickets and carry them out.
+
+    The GitHub login is mapped to an actor (actors.github_login). The decision
+    then goes through the exact same path as the dashboard: identity, policy
+    (owner, senior limits, junior denied), required reason, execution through
+    the gate, verification, audit. Unknown GitHub users are refused and logged.
+    """
+    import ops
+    if not enabled():
+        return []
+    out = []
+    for p in db.proposals.find({"status": "pending", "ticket": {"$exists": True}}):
+        n = p["ticket"]["number"]
+        seen = set(p.get("github_comments_seen", []))
+        try:
+            comments = _api("GET", f"/issues/{n}/comments?per_page=50")
+        except Exception as e:
+            out.append({"ticket": n, "error": str(e)})
+            continue
+        for c in comments:
+            if c["id"] in seen:
+                continue
+            db.proposals.update_one({"_id": p["_id"]}, {"$addToSet": {"github_comments_seen": c["id"]}})
+            m = COMMAND.match(c.get("body") or "")
+            if not m:
+                continue
+            login = c["user"]["login"]
+            actor = db.actors.find_one({"github_login": {"$regex": f"^{_re.escape(login)}$", "$options": "i"}})
+            decision = "approve" if m.group(1).lower() == "approve" else "reject"
+            reason = m.group(2).strip() or ""
+            if not actor:
+                gate.audit(db, "github_decision_refused", actor_id=f"github:{login}", system="github",
+                           action_id=p.get("action_id"), client_id=p.get("client_id"), campaign_id=p["campaign_id"],
+                           reason="GitHub user is not linked to anyone on the agency team.")
+                try:
+                    _api("POST", f"/issues/{n}/comments", {"body": f"`{login}` is not linked to anyone on the agency "
+                                                                    f"team, so this decision was refused and logged."})
+                except Exception:
+                    pass
+                out.append({"ticket": n, "login": login, "result": "refused"})
+                continue
+            gate.audit(db, "github_decision_received", actor_id=actor["_id"], system="github",
+                       action_id=p.get("action_id"), client_id=p.get("client_id"), campaign_id=p["campaign_id"],
+                       decision=decision, comment=reason, github_login=login, comment_url=c.get("html_url"))
+            res = ops.decide_proposal(db, platforms, p["_id"], decision, actor["_id"],
+                                      (reason + " (via GitHub)") if reason else "")
+            if not res.get("ok") and res.get("error"):
+                try:
+                    _api("POST", f"/issues/{n}/comments", {"body": f"Not carried out for `{actor['_id']}`: {res['error']}"})
+                except Exception:
+                    pass
+            out.append({"ticket": n, "actor": actor["_id"], "decision": decision, "result": res.get("status") or res.get("error")})
+            break  # one decision per ticket
+    return out

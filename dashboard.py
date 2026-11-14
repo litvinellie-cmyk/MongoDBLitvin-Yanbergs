@@ -20,6 +20,7 @@ import ops
 import nl_rules
 import report
 import growth
+import tickets
 import timemachine
 import voice
 import tracking
@@ -284,6 +285,8 @@ class Handler(BaseHTTPRequestHandler):
                                           body.get("comment", ""))
             elif p == "/api/undo":
                 out = ops.undo(DB, PLATFORMS, body["id"], actor)
+            elif p == "/api/github/sync":
+                out = {"ok": True, "decisions": tickets.sync_github_decisions(DB, PLATFORMS)}
             elif p == "/api/rules/draft":
                 out = nl_rules.draft(DB, body.get("text", ""), actor)
             elif p == "/api/rules/decide":
@@ -316,7 +319,20 @@ class Handler(BaseHTTPRequestHandler):
             self._send(500, {"ok": False, "error": f"{type(e).__name__}: {e}"})
 
 
+def _github_poller():
+    import time
+    while True:
+        try:
+            res = tickets.sync_github_decisions(DB, PLATFORMS)
+            for r in res:
+                print(f"[github decision] {r}")
+        except Exception as e:
+            print(f"[github poll] {e}")
+        time.sleep(20)
+
+
 if __name__ == "__main__":
+    threading.Thread(target=_github_poller, daemon=True).start()
     port = int(os.environ.get("PORT", "8000"))
     print(f"dashboard on http://localhost:{port}")
     ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()
