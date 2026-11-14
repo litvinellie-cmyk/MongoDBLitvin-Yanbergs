@@ -31,6 +31,8 @@ from rules import merged_settings
 from store import campaign_stats, day_str, get_db
 from worker import run_once
 
+import threading
+RUN_LOCK = threading.Lock()  # never two agent runs at once
 DB = get_db()
 PLATFORMS = build_platforms(DB)
 PAGE = (Path(__file__).parent / "dashboard.html").read_bytes()
@@ -204,6 +206,14 @@ class Handler(BaseHTTPRequestHandler):
             q = parse_qs(u.query)
             t = datetime.fromisoformat(q.get("t", [""])[0].replace("Z", "+00:00"))
             return self._send(200, timemachine.state_at(DB, q.get("client", ["all"])[0], t))
+        if u.path == "/api/live":
+            since = datetime.fromisoformat(parse_qs(u.query).get("since", [""])[0].replace("Z", "+00:00"))
+            evs = list(DB.audit_events.find({"at": {"$gt": since}},
+                                            {"event": 1, "at": 1, "actor_id": 1, "campaign_id": 1, "effect": 1,
+                                             "policy_id": 1, "action_type": 1, "system": 1, "result.ok": 1,
+                                             "result.verified": 1, "result.number": 1, "action.type": 1,
+                                             "summary": 1, "client_id": 1}).sort([("at", 1), ("_id", 1)]).limit(400))
+            return self._send(200, {"events": evs})
         if u.path == "/api/briefing":
             from store import load_env
             load_env()
@@ -262,8 +272,13 @@ class Handler(BaseHTTPRequestHandler):
         actor = body.get("actor", "")
         try:
             p = urlparse(self.path).path
+            if p in ("/api/run", "/api/spike") and not RUN_LOCK.acquire(blocking=False):
+                return self._send(200, {"ok": False, "busy": True, "error": "The agent is already running. Wait for it to finish."})
             if p == "/api/run":
-                out = run_once(DB, PLATFORMS)
+                try:
+                    out = run_once(DB, PLATFORMS)
+                finally:
+                    RUN_LOCK.release()
             elif p == "/api/decide":
                 out = ops.decide_proposal(DB, PLATFORMS, body["id"], body["decision"], actor,
                                           body.get("comment", ""))
@@ -285,7 +300,10 @@ class Handler(BaseHTTPRequestHandler):
             elif p == "/api/goal/set":
                 out = growth.set_goal(DB, body["client"], int(body.get("target") or 0), actor)
             elif p == "/api/spike":
-                out = spike(body.get("client"))
+                try:
+                    out = spike(body.get("client"))
+                finally:
+                    RUN_LOCK.release()
             elif p == "/api/forget":
                 out = memory.forget(DB, body["id"], actor)
             elif p == "/api/halt":

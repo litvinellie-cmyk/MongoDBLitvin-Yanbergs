@@ -107,8 +107,47 @@ label.chk { display: flex; gap: 6px; align-items: center; font-size: 14px; color
 pre.code { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px; font-size: 12px; overflow-x: auto; }
 #briefBox .brief { margin: 16px 20px 0; padding: 12px 16px; border-radius: 12px; background: var(--allow-bg); color: var(--ink); border: 1px solid var(--allow); }
 #briefBox .brief b { color: var(--allow); }
+#nav { display: flex; gap: 4px; flex-wrap: wrap; width: 100%; margin-top: 4px; }
+#nav a { color: #c1c7c6; text-decoration: none; font-size: 13px; padding: 5px 10px; border-radius: 999px; transition: background .15s, color .15s; }
+#nav a:hover { background: var(--hdr-2); color: #fff; }
+#nav .count { background: var(--brand); color: #001e2b; border-radius: 999px; padding: 0 7px; font-weight: 700; font-size: 11px; margin-left: 2px; }
+#nav .count:empty { display: none; }
+section { scroll-margin-top: 140px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+@keyframes slideUp { from { opacity: 0; transform: translate(-50%, 16px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(0, 237, 100, .5); } 50% { box-shadow: 0 0 0 8px rgba(0, 237, 100, 0); } }
+@keyframes shimmer { from { background-position: -200px 0; } to { background-position: 200px 0; } }
+.spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--allow); animation: spin .8s linear infinite; display: inline-block; flex: none; }
+button.loading { pointer-events: none; opacity: .75; position: relative; padding-left: 30px; }
+button.loading::before { content: ""; position: absolute; left: 10px; top: 50%; width: 12px; height: 12px; margin-top: -6px; border-radius: 50%;
+  border: 2px solid currentColor; border-top-color: transparent; animation: spin .7s linear infinite; }
+header button.primary:not(.loading) { animation: pulse 2.4s ease-in-out infinite; }
+button, .btnlink, .card, .ccard { transition: transform .12s, box-shadow .15s, border-color .15s, background .15s; }
+button:active { transform: scale(.97); }
+.card:hover, .ccard:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0, 30, 43, .08); }
+.ev.new, .card.new, tr.new { animation: fadeIn .45s ease-out both; }
+.ev.new { background: linear-gradient(90deg, var(--allow-bg), transparent 70%); border-radius: 6px; }
+#runPanel { position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); bottom: 20px; width: min(420px, calc(100vw - 32px)); z-index: 6;
+  background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--brand); border-radius: 14px; padding: 14px 16px;
+  box-shadow: 0 12px 40px rgba(0, 30, 43, .18); animation: fadeIn .25s ease-out; }
+.rp-head { display: flex; align-items: center; gap: 10px; }
+.rp-head .muted { margin-left: auto; font-variant-numeric: tabular-nums; }
+.rp-bar { height: 6px; background: var(--line); border-radius: 6px; overflow: hidden; margin: 10px 0; }
+#rpBar { height: 100%; width: 0; background: linear-gradient(90deg, var(--allow), var(--brand)); border-radius: 6px; transition: width .6s ease; }
+#rpSteps { margin: 0 0 8px; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 13px; }
+#rpSteps li { color: var(--muted); padding-left: 22px; position: relative; transition: color .2s; }
+#rpSteps li::before { content: "○"; position: absolute; left: 2px; }
+#rpSteps li.on { color: var(--ink); font-weight: 600; } #rpSteps li.on::before { content: "◐"; color: var(--allow); }
+#rpSteps li.done { color: var(--ink); } #rpSteps li.done::before { content: "✓"; color: var(--allow); font-weight: 700; }
+.rp-counts { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); padding: 6px 0; border-top: 1px solid var(--line); }
+.rp-counts b { color: var(--ink); font-size: 16px; font-variant-numeric: tabular-nums; }
+#rpFeed { max-height: 130px; overflow: hidden; font-size: 12px; display: grid; gap: 3px; }
+#rpFeed div { animation: fadeIn .3s ease-out both; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } }
 #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); max-width: 90vw;
-  padding: 10px 16px; border-radius: 10px; font-weight: 500; display: none; z-index: 5; }
+  padding: 12px 18px; border-radius: 12px; font-weight: 600; display: none; z-index: 7; box-shadow: 0 8px 30px rgba(0, 30, 43, .2);
+  animation: slideUp .3s ease-out; }
 dialog { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--ink);
   width: min(760px, 94vw); max-height: 86vh; padding: 0; }
 dialog .head { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--line); }
@@ -137,30 +176,50 @@ code { font-size: 12px; }
     <button id="briefBtn" title="The agent reads you a short spoken update">▶ Play briefing</button>
     <button id="spikeBtn" title="Demo: one campaign starts spending 4x too fast">Simulate spend spike</button>
   </div>
+  <nav id="nav">
+    <a href="#goalSec">Goal</a><a href="#sec-approvals">Approvals <span id="navCount" class="count"></span></a>
+    <a href="#sec-campaigns">Campaigns</a><a href="#sec-doctor">Doctor</a><a href="#sec-channels">Channels</a>
+    <a href="#sec-tracking">Tracking</a><a href="#sec-skills">Skills</a><a href="#sec-changes">Changes</a>
+    <a href="#sec-rules">Rules</a><a href="#sec-audit">Audit trail</a><a href="#sec-tm">Time machine</a>
+  </nav>
 </header>
+<div id="runPanel" hidden>
+  <div class="rp-head"><span class="spinner"></span><b id="rpTitle">Agent is running</b><span id="rpTime" class="muted"></span></div>
+  <div class="rp-bar"><div id="rpBar"></div></div>
+  <ol id="rpSteps">
+    <li data-step="pull">Pulling fresh campaign data</li>
+    <li data-step="rules">Checking every action against rules in Atlas</li>
+    <li data-step="memory">Recalling past results</li>
+    <li data-step="act">Applying safe changes and verifying them</li>
+    <li data-step="ask">Sending bigger changes for approval</li>
+    <li data-step="github">Opening tickets on GitHub</li>
+  </ol>
+  <div class="rp-counts"><span><b id="rpAllow">0</b> applied</span><span><b id="rpAsk">0</b> need approval</span><span><b id="rpDeny">0</b> blocked</span><span><b id="rpGh">0</b> GitHub</span></div>
+  <div id="rpFeed"></div>
+</div>
 <div id="banner"></div>
 <div id="briefBox" hidden><div class="alert brief"><div class="row"><b id="briefHead">Voice briefing</b><button id="briefStop">Stop</button></div><div id="briefText"></div><audio id="briefAudio"></audio></div></div>
 <main>
   <div>
-    <section id="goalSec">
+    <section id="goalSec" class="sec-goal">
       <h2>Goal this month</h2>
       <div id="goalBox"></div>
     </section>
-    <section>
+    <section id="sec-approvals">
+      <h2>Waiting for approval</h2>
+      <div id="props"></div>
+    </section>
+    <section id="sec-campaigns">
       <h2>Campaigns (last 7 days)</h2>
       <div id="clientCards" class="cards"></div>
       <div class="scroll"><table id="camps"></table></div>
     </section>
-    <section>
-      <h2>Waiting for approval</h2>
-      <div id="props"></div>
-    </section>
-    <section>
+    <section id="sec-doctor">
       <h2>Campaign doctor</h2>
       <div class="muted" style="margin-bottom:8px">Every campaign checked against typical ranges for its platform. Campaigns without enough reliable data get no advice until they have it.</div>
       <div id="doctor"></div>
     </section>
-    <section>
+    <section id="sec-channels">
       <h2>Channels beyond ads</h2>
       <div class="tabs" id="chTabs">
         <button data-tab="ai" class="on">AI search (AEO/GEO)</button><button data-tab="comp">Competitors</button>
@@ -170,7 +229,7 @@ code { font-size: 12px; }
       <div id="chBody"><div class="empty">Pick one client to see its channels.</div></div>
       <div class="muted" style="margin-top:8px">Simulated data for the demo. Sources: ChatGPT, Perplexity, Gemini, Google AI Overviews and Claude answers; Meta Ad Library and Google Ads Transparency; Search Console; Google Business Profile.</div>
     </section>
-    <section>
+    <section id="sec-tracking">
       <h2>Tracking and audiences</h2>
       <div class="tabs" id="trTabs">
         <button data-tr="utm" class="on">UTM audit</button><button data-tr="capi">Conversions API</button>
@@ -178,7 +237,7 @@ code { font-size: 12px; }
       </div>
       <div id="trBody"></div>
     </section>
-    <section>
+    <section id="sec-skills">
       <h2>Optimization skills</h2>
       <div class="tabs" id="skTabs">
         <button data-sk="marg" class="on">Next dollar returns</button><button data-sk="goal">Goal planner</button>
@@ -188,11 +247,11 @@ code { font-size: 12px; }
       </div>
       <div id="skBody"></div>
     </section>
-    <section>
+    <section id="sec-changes">
       <h2>Changes made</h2>
       <div class="scroll"><table id="changes"></table></div>
     </section>
-    <section>
+    <section id="sec-memory">
       <h2>Agent memory (past decisions and results)</h2>
       <div class="muted" style="margin-bottom:8px">Scoped to one client, expires after 180 days, and any approver can forget an entry.</div>
       <div class="scroll"><table id="mems"></table></div>
@@ -201,7 +260,7 @@ code { font-size: 12px; }
       <h2>Connected accounts</h2>
       <div class="scroll"><table id="conns"></table></div>
     </section>
-    <section>
+    <section id="sec-rules">
       <h2>Rules in plain English</h2>
       <div class="row" style="gap:8px;justify-content:flex-start;flex-wrap:wrap">
         <input id="ruleIn" placeholder="never spend more than $150 a day on dental clients" style="font:inherit;flex:1;min-width:240px;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink)">
@@ -216,11 +275,11 @@ code { font-size: 12px; }
     </section>
   </div>
   <div>
-    <section>
+    <section id="sec-audit">
       <h2>Audit trail</h2>
       <div id="events" class="events"></div>
     </section>
-    <section>
+    <section id="sec-tm">
       <h2>Time machine</h2>
       <div class="muted">Drag to any moment and see what the agent knew then: rules in force, budgets, what was waiting, and the kill switch.</div>
       <input id="tmSlider" type="range" min="0" max="1000" value="1000" style="width:100%;margin:12px 0 4px">
@@ -254,6 +313,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":
 const money = (n) => n == null ? "n/a" : "$" + Number(n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
 const t = (d) => d ? new Date(d).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"}) : "";
 let S = null;
+const SEEN = new Set(); let SEEN_READY = false;
 // Only touch the DOM when content changed, so buttons are not swapped out mid click.
 const setHTML = (id, html) => { const el = $(id); if (el._last !== html) { el.innerHTML = html; el._last = html; } };
 try { $("actor").dataset.saved = localStorage.getItem("actor") || ""; } catch (e) {}
@@ -264,7 +324,7 @@ const plat = (p, label) => `<span class="plat p-${esc(p)}">${esc(label || PL[p] 
 
 function toast(msg, ok) {
   const el = $("toast");
-  el.textContent = msg; el.className = ok ? "allow" : "deny"; el.style.display = "block";
+  el.textContent = msg; el.className = ok ? "allow" : "deny"; el.style.display = "none"; void el.offsetWidth; el.style.display = "block";
   clearTimeout(el._t); el._t = setTimeout(() => (el.style.display = "none"), 4200);
 }
 async function post(path, body) {
@@ -409,7 +469,8 @@ function render() {
     S.policies.map((p) => `<tr><td class="num">${p.priority}</td><td><code>${esc(p._id)}</code>${p.active === false ? ' <span class="badge info">' + esc((p.status || "off").toUpperCase()) + " · NOT IN FORCE</span>" : ""}<div class="muted">${esc(p.why)}</div></td>
       <td>${esc(p.roles.join(", "))}</td><td>${esc(p.actions.join(", "))}</td><td>${badge(p.effect)}</td></tr>`).join(""));
 
-  setHTML("events", S.events.map((e) => `<div class="ev"><time>${t(e.at)}</time><div>${eventLine(e)}</div></div>`).join("") ||
+  const fresh = (id) => { const n = SEEN_READY && !SEEN.has(id); SEEN.add(id); return n; };
+  setHTML("events", S.events.map((e) => `<div class="ev${fresh(e._id) ? " new" : ""}"><time>${t(e.at)}</time><div>${eventLine(e)}</div></div>`).join("") ||
     '<div class="empty">No events yet. Press "Run agent now".</div>');
 }
 let TAB = "ai", CH = null, CH_FOR = null;
@@ -633,6 +694,9 @@ async function load() {
   const r = await fetch("/api/state?client=" + encodeURIComponent(CLIENT));
   S = await r.json();
   render();
+  SEEN_READY = true;
+  const waiting = S.client === "all" ? Object.values(S.pending_by_client || {}).reduce((a, b) => a + b, 0) : S.proposals.length;
+  $("navCount").textContent = waiting || "";
   loadChannels(false);
   loadSkills(false);
   loadTracking(false);
@@ -697,22 +761,94 @@ document.addEventListener("click", async (ev) => {
   if (card) { CLIENT = card.dataset.client; try { localStorage.setItem("client", CLIENT); } catch (e) {} return load(); }
   const b = ev.target.closest("button"); if (!b) return;
   if (b.dataset.explain) return explain(b.dataset.explain);
+  const busy = (fn) => { b.classList.add("loading"); return fn().finally(() => b.classList.remove("loading")); };
   if (b.dataset.decide) {
     const comment = prompt(b.dataset.decide === "approve" ? "Why are you approving this? (saved to the audit trail)" : "Why are you rejecting this?", "");
     if (comment === null) return;
-    return post("/api/decide", {id: b.dataset.id, decision: b.dataset.decide, comment});
+    return busy(() => post("/api/decide", {id: b.dataset.id, decision: b.dataset.decide, comment}));
   }
-  if (b.dataset.undo) return post("/api/undo", {id: b.dataset.undo});
+  if (b.dataset.undo) return busy(() => post("/api/undo", {id: b.dataset.undo}));
   if (b.dataset.forget) return post("/api/forget", {id: b.dataset.forget});
 });
-$("run").onclick = async () => {
-  const r = await fetch("/api/run", {method: "POST", body: "{}"}); const j = await r.json();
+async function runWithProgress(path, body, title) {
+  const btn = path === "/api/run" ? $("run") : $("spikeBtn");
+  btn.classList.add("loading"); btn.disabled = true;
+  const panel = $("runPanel"); panel.hidden = false; $("rpTitle").textContent = title;
+  ["rpAllow", "rpAsk", "rpDeny", "rpGh"].forEach((id) => ($(id).textContent = "0"));
+  $("rpFeed").innerHTML = ""; $("rpBar").style.width = "4%";
+  const steps = [...document.querySelectorAll("#rpSteps li")];
+  steps.forEach((li) => li.className = ""); steps[0].className = "on";
+  const since = new Date(Date.now() - 1500).toISOString(); const t0 = Date.now();
+  let seen = new Set(), done = false, cnt = {allow: 0, ask: 0, deny: 0, gh: 0};
+  let stepIdx = 0;
+  const mark = (name) => {
+    const i = steps.findIndex((li) => li.dataset.step === name);
+    if (i > stepIdx) stepIdx = i;
+    steps.forEach((li, k) => li.className = k < stepIdx ? "done" : k === stepIdx ? "on" : "");
+  };
+  const NICE = {fix_utm: "tracking link", sync_exclusions: "buyer exclusion list", add_negative: "search term",
+    pause_keyword: "paid keyword", reply_review: "review reply", set_frequency_cap: "retargeting tier"};
+  const label = (e) => {
+    const isItem = /^(ad|aud|sync|keyword|review|term):/.test(e.campaign_id || "");
+    const c = isItem ? (NICE[e.action_type] || "item") : (e.campaign_id || "").split(":").pop();
+    if (e.event === "policy_check" && ["open_ticket", "close_ticket"].includes(e.action_type)) return null;
+    if (e.event === "policy_check" && e.actor_id && e.actor_id.startsWith("agent")) {
+      const verb = {set_budget: "budget change", set_targeting: "targeting change", pause: "pause", fix_utm: "fix",
+        sync_exclusions: "sync", add_negative: "add negative", pause_keyword: "pause", reply_review: "post",
+        set_frequency_cap: "lower budget"}[e.action_type] || e.action_type.replace("_", " ");
+      if (e.effect === "allow") return ["allow", `✓ Done on its own: ${verb}, ${c}`];
+      if (e.effect === "require_approval") return ["ask", `⏳ Needs a person: ${verb}, ${c}`];
+      return ["deny", `⛔ Blocked by ${e.policy_id}: ${c}`];
+    }
+    if (e.system === "github" && e.event === "action_result") return ["gh", `🎫 GitHub ticket #${(e.result || {}).number || ""} opened`];
+    if (e.event === "memory_recalled") return ["mem", `🧠 Recalled past results for ${c}`];
+    if (e.event === "circuit_breaker") return ["deny", "🛑 Circuit breaker tripped"];
+    return null;
+  };
+  const poll = async () => {
+    while (!done) {
+      try {
+        const j = await (await fetch("/api/live?since=" + encodeURIComponent(since))).json();
+        for (const e of j.events) {
+          if (seen.has(e._id)) continue; seen.add(e._id);
+          if (e.event === "run_started" || e.event === "policy_check") mark("rules");
+          if (e.event === "memory_recalled") mark("memory");
+          if (e.event === "action_sent" && !e.system) mark("act");
+          if (e.event === "proposal_created") mark("ask");
+          if (e.system === "github") mark("github");
+          const l = label(e); if (!l) continue;
+          if (cnt[l[0]] !== undefined) cnt[l[0]]++;
+          const d = document.createElement("div"); d.textContent = l[1]; $("rpFeed").prepend(d);
+          while ($("rpFeed").children.length > 7) $("rpFeed").lastChild.remove();
+        }
+        $("rpAllow").textContent = cnt.allow; $("rpAsk").textContent = cnt.ask; $("rpDeny").textContent = cnt.deny; $("rpGh").textContent = cnt.gh;
+      } catch (e) {}
+      const secs = (Date.now() - t0) / 1000;
+      $("rpTime").textContent = Math.round(secs) + "s"; $("rpBar").style.width = Math.min(92, 4 + secs * 3) + "%";
+      await new Promise((r) => setTimeout(r, 900));
+    }
+  };
+  poll();
+  let j = {};
+  try { j = await (await fetch(path, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body || {})})).json(); }
+  finally {
+    done = true; steps.forEach((li) => li.className = "done"); $("rpBar").style.width = "100%";
+    $("rpTitle").textContent = j.halted ? "Agent is halted. Nothing ran." : "Done";
+    btn.classList.remove("loading"); btn.disabled = false;
+    setTimeout(() => { panel.hidden = true; }, 3500);
+  }
   CH_FOR = null; SK_FOR = null; TR_FOR = null; G_FOR = null;
-  toast(j.halted ? "Agent is halted. Nothing ran." : `Run ${j.run_id}: ${j.applied} applied, ${j.proposed} proposed, ${j.denied} denied${j.breaker_trips ? ", circuit breaker tripped" : ""}`, !j.halted);
-  load();
+  await load();
+  return j;
+}
+$("run").onclick = async () => {
+  const j = await runWithProgress("/api/run", {}, "Agent is running");
+  if (j.busy) return toast(j.error, false);
+  toast(j.halted ? "Agent is halted. Nothing ran." : `Run finished: ${j.applied} applied, ${j.proposed} sent for approval, ${j.denied} blocked${j.breaker_trips ? ", circuit breaker tripped" : ""}`, !j.halted);
+  if (!j.halted && j.proposed) document.getElementById("sec-approvals").scrollIntoView({behavior: "smooth"});
 };
 $("briefBtn").onclick = async () => {
-  $("briefBtn").textContent = "Preparing...";
+  $("briefBtn").classList.add("loading"); $("briefBtn").textContent = "Preparing...";
   const b = await (await fetch("/api/briefing?client=" + encodeURIComponent(CLIENT))).json();
   $("briefText").textContent = b.text; $("briefBox").hidden = false;
   try { speechSynthesis.cancel(); } catch (e) {}
@@ -724,14 +860,12 @@ $("briefBtn").onclick = async () => {
     $("briefHead").textContent = "Voice briefing (browser voice: add an ElevenLabs key for the ElevenLabs voice)";
     try { const u = new SpeechSynthesisUtterance(b.text); u.rate = 1.02; speechSynthesis.speak(u); } catch (e) {}
   }
-  $("briefBtn").textContent = "▶ Play briefing";
+  $("briefBtn").classList.remove("loading"); $("briefBtn").textContent = "▶ Play briefing";
 };
 $("briefStop").onclick = () => { try { speechSynthesis.cancel(); } catch (e) {} $("briefAudio").pause(); $("briefBox").hidden = true; };
 $("spikeBtn").onclick = async () => {
   if (CLIENT === "all") return toast("Pick one client first, then simulate the spike.", false);
-  const r = await fetch("/api/spike", {method: "POST", headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({client: CLIENT})});
-  const j = await r.json();
+  const j = await runWithProgress("/api/spike", {client: CLIENT}, "Spend spike: agent is checking pace");
   if (j.ok === false) toast(j.error, false);
   else toast(j.breaker_trips ? "Spend spike detected. Circuit breaker halted the client." : "Spike simulated, breaker did not trip.", !!j.breaker_trips);
   load();
