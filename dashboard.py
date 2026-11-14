@@ -20,6 +20,7 @@ import ops
 import nl_rules
 import report
 import timemachine
+import tracking
 from datetime import datetime
 import skills
 from evidence import kpis
@@ -199,6 +200,12 @@ class Handler(BaseHTTPRequestHandler):
             q = parse_qs(u.query)
             t = datetime.fromisoformat(q.get("t", [""])[0].replace("Z", "+00:00"))
             return self._send(200, timemachine.state_at(DB, q.get("client", ["all"])[0], t))
+        if u.path == "/api/tracking":
+            cid = parse_qs(u.query).get("client", ["all"])[0]
+            if cid == "all":
+                return self._send(200, {"needs_client": True})
+            return self._send(200, {"utm": tracking.utm_audit(DB, cid), "capi": tracking.capi(DB, cid),
+                                    "ladder": tracking.ladder(DB, cid), "syncs": tracking.syncs(DB, cid)})
         if u.path == "/api/skills":
             cid = parse_qs(u.query).get("client", ["all"])[0]
             return self._send(200, skills_state(cid))

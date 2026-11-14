@@ -85,7 +85,8 @@ class SandboxPlatform(Platform):
     def _item(self, target):
         from bson import ObjectId
         kind, _id = target.split(":", 1)
-        coll = {"keyword": self.db.seo_keywords, "review": self.db.reviews, "term": self.db.search_terms}[kind]
+        coll = {"keyword": self.db.seo_keywords, "review": self.db.reviews, "term": self.db.search_terms,
+                "ad": self.db.ads, "aud": self.db.audiences, "sync": self.db.audience_syncs}[kind]
         return coll, {"_id": ObjectId(_id)}
 
     def pause_keyword(self, account, target):
@@ -113,9 +114,24 @@ class SandboxPlatform(Platform):
         if coll.update_one(q, {"$set": {"status": "active"}}).matched_count != 1:
             raise RuntimeError(f"{target} not found")
 
+    def set_item_field(self, account, target, field, value):
+        coll, q = self._item(target)
+        if coll.update_one(q, {"$set": {field: value}}).matched_count != 1:
+            raise RuntimeError(f"{target} not found")
+
+    def sync_now(self, account, target):
+        coll, q = self._item(target)
+        if coll.update_one(q, {"$set": {"last_sync": utcnow()}}).matched_count != 1:
+            raise RuntimeError(f"{target} not found")
+
     def verify_item(self, target, action):
         coll, q = self._item(target)
         doc = coll.find_one(q) or {}
+        if action["type"] in ("fix_utm", "set_frequency_cap"):
+            return doc.get(action["field"]) == action["new"], {action["field"]: doc.get(action["field"])}
+        if action["type"] == "sync_exclusions":
+            fresh = doc.get("last_sync") and (utcnow() - doc["last_sync"]).total_seconds() < 120
+            return bool(fresh), {"last_sync": doc.get("last_sync")}
         if action["type"] in ("add_negative", "remove_negative"):
             want = "negative" if action["type"] == "add_negative" else "active"
             return doc.get("status") == want, {"status": doc.get("status")}

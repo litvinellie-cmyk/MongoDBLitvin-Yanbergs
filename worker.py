@@ -227,6 +227,8 @@ def _run_once(db, platforms, now) -> dict:
         import skills
         channels.run(db, platforms, run_id, counts)
         skills.run(db, platforms, run_id, counts)
+        import tracking
+        tracking.run(db, platforms, run_id, counts)
     counts["outcomes"] = measure_outcomes(db, now)
     status = "halted" if counts["halted"] else "finished"
     db.runs.update_one({"_id": run_id, "status": "running"},
@@ -259,6 +261,8 @@ def seed(db, platforms, reset=False):
     import skills
     channels.seed(db, now)
     skills.seed(db, now)
+    import tracking
+    tracking.seed(db, now)
     from demo_data import MEMORIES
     if reset:
         db.memories.delete_many({})

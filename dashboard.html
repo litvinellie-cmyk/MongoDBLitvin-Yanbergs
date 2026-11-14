@@ -134,6 +134,14 @@ code { font-size: 12px; }
       <div class="muted" style="margin-top:8px">Simulated data for the demo. Sources: ChatGPT, Perplexity, Gemini, Google AI Overviews and Claude answers; Meta Ad Library and Google Ads Transparency; Search Console; Google Business Profile.</div>
     </section>
     <section>
+      <h2>Tracking and audiences</h2>
+      <div class="tabs" id="trTabs">
+        <button data-tr="utm" class="on">UTM audit</button><button data-tr="capi">Conversions API</button>
+        <button data-tr="ladder">Retargeting ladder</button><button data-tr="sync">Audience sync</button>
+      </div>
+      <div id="trBody"></div>
+    </section>
+    <section>
       <h2>Optimization skills</h2>
       <div class="tabs" id="skTabs">
         <button data-sk="marg" class="on">Next dollar returns</button><button data-sk="goal">Goal planner</button>
@@ -212,7 +220,7 @@ async function post(path, body) {
   const j = await r.json();
   if (j.ok === false) toast(j.error || "Denied", false);
   else toast(j.status ? "Done: " + j.status : "Done", true);
-  CH_FOR = null; SK_FOR = null;
+  CH_FOR = null; SK_FOR = null; TR_FOR = null;
   await load();
   return j;
 }
@@ -335,11 +343,11 @@ function render() {
     </div>`).join("") : '<div class="empty">Nothing waiting.</div>');
 
   setHTML("changes", "<tr><th>Time</th><th>Campaign</th><th>Change</th><th>By</th><th>Result</th><th></th></tr>" +
-    (S.changes.map((c) => `<tr><td>${t(c.applied_at)}</td><td>${esc(c.campaign_id)}</td>
+    (S.changes.map((c) => `<tr><td>${t(c.applied_at)}</td><td>${esc(/^(ad|aud|sync|keyword|review|term):/.test(c.campaign_id) ? (c.action.label || c.campaign_id) : c.campaign_id)}</td>
       <td>${esc(c.action.type)} ${c.action.type === "set_budget" ? money(c.action.old) + " → " + money(c.action.new) : c.action.type === "set_targeting" ? "ages " + c.action.new.age_min + " to " + c.action.new.age_max : c.action.label ? esc(c.action.label) : ""}${c.reverts ? ' <span class="tag">undo</span>' : ""}</td>
       <td>${esc(c.actor_id)}<div class="muted">${esc(c.mode)}${c.approval ? ", approved by " + esc(c.approval.approved_by) + (c.approval.comment ? ': "' + esc(c.approval.comment) + '"' : "") : ""}</div></td>
       <td>${c.result.ok ? (c.result.verified ? badge("allow").replace("ALLOW", "VERIFIED") : '<span class="badge pending">UNVERIFIED</span>') : badge("deny").replace("DENY", "FAILED")}</td>
-      <td><button class="link" data-explain="${esc(c.action_id)}">explain</button>${c.result.ok && !c.reverts && !c.undone ? ` · <button class="link" data-undo="${esc(c._id)}">undo</button>` : c.undone ? ' <span class="tag">undone</span>' : ""}</td></tr>`).join("") ||
+      <td><button class="link" data-explain="${esc(c.action_id)}">explain</button>${c.result.ok && !c.reverts && !c.undone && !["sync_exclusions", "reply_review"].includes(c.action.type) ? ` · <button class="link" data-undo="${esc(c._id)}">undo</button>` : c.undone ? ' <span class="tag">undone</span>' : ""}</td></tr>`).join("") ||
       '<tr><td colspan="6" class="empty">No changes yet.</td></tr>'));
 
   setHTML("pols", "<tr><th>#</th><th>Policy</th><th>Roles</th><th>Actions</th><th>Effect</th></tr>" +
@@ -395,6 +403,41 @@ function renderChannels() {
       <span class="badge st-${esc(t.status)}">${esc(t.status.toUpperCase())}</span></div>${t.checks.map((c) => `<div>${esc(c)}</div>`).join("")}</div>`).join("");
   }
   setHTML("chBody", h);
+}
+let TRT = "utm", TR = null, TR_FOR = null;
+async function loadTracking(force) {
+  if (CLIENT === "all") return setHTML("trBody", '<div class="empty">Pick one client to see its tracking and audiences.</div>');
+  if (force || TR_FOR !== CLIENT || !TR) { TR = await (await fetch("/api/tracking?client=" + encodeURIComponent(CLIENT))).json(); TR_FOR = CLIENT; }
+  renderTracking();
+}
+function renderTracking() {
+  document.querySelectorAll("#trTabs button").forEach((b) => b.classList.toggle("on", b.dataset.tr === TRT));
+  if (!TR || TR.needs_client) return;
+  let h = "";
+  if (TRT === "utm") {
+    const u = TR.utm;
+    h = `<div><span class="kpi"><b>${u.total - u.bad}/${u.total}</b>ads with correct tracking links</span></div>
+      <div class="muted" style="margin-bottom:8px">Naming rule: ${esc(u.convention)}</div>
+      <div class="scroll"><table><tr><th>Ad</th><th>Platform</th><th>Link</th><th>Status</th></tr>${u.ads.map((a) => `<tr><td>${esc(a.ad)}</td><td>${plat(a.platform)}</td>
+        <td class="muted" style="word-break:break-all;max-width:320px">${esc(a.url)}${a.fix ? `<div style="color:var(--allow)">Fix: ${esc(a.fix)}</div>` : ""}</td>
+        <td>${a.issues.length ? a.issues.map((i) => `<div class="badge deny" style="display:inline-block;margin:2px 0">${esc(i)}</div>`).join("<br>") : '<span class="badge allow">OK</span>'}</td></tr>`).join("")}</table></div>
+      <div class="muted">The agent fixes broken links on its own (tracking only, no spend change), and every fix is logged and can be undone.</div>`;
+  } else if (TRT === "capi") {
+    h = TR.capi.map((c) => `<div class="card"><div class="row"><b>${plat(c.platform)} ${esc(c.name)}</b><span class="badge st-${esc(c.status)}">${esc(c.status.toUpperCase())}</span></div>
+      <div class="muted">${c.pixel} browser pixel events · ${c.server} server events${c.emq != null ? " · match quality " + c.emq + "/10" : ""}</div>
+      ${c.checks.map((x) => `<div>${esc(x)}</div>`).join("")}</div>`).join("");
+  } else if (TRT === "ladder") {
+    h = `<div class="scroll"><table><tr><th>Tier</th><th>Window</th><th>Message</th><th>People</th><th>Budget/day</th><th>Frequency 7d</th><th>CPA</th><th></th></tr>
+      ${TR.ladder.map((t) => `<tr><td>${esc(t.tier)}</td><td>${esc(t.window)}</td><td class="muted">${esc(t.message)}</td><td>${t.size ? t.size.toLocaleString() : "n/a"}</td>
+        <td>${t.size ? money(t.budget) : "n/a"}</td><td>${t.size ? t.frequency_7d + " (cap " + t.frequency_cap + ")" : "n/a"}</td><td>${money(t.cpa)}</td>
+        <td>${t.issue ? `<span class="badge ${t.status === "missing" ? "pending" : "deny"}">${t.status === "missing" ? "MISSING" : "TOO FREQUENT"}</span><div class="muted">${esc(t.issue)}</div>` : '<span class="badge allow">OK</span>'}</td></tr>`).join("")}</table></div>
+      <div class="muted">Each step of the buying journey gets its own audience, time window, message and budget. Overexposed tiers go to the approval queue.</div>`;
+  } else if (TRT === "sync") {
+    h = `<table><tr><th>Source</th><th>Pushed to</th><th>Members</th><th>Match rate</th><th>Last sync</th></tr>${TR.syncs.map((x) => `<tr><td>${esc(x.source)}</td><td>${esc(x.audience)}</td><td>${x.members.toLocaleString()}</td><td>${x.match_rate}%</td>
+      <td>${x.stale ? `<span class="badge deny">STALE</span> <span class="muted">${esc(x.note)}</span>` : `<span class="muted">${esc(x.note)}</span>`}</td></tr>`).join("")}</table>
+      <div class="muted">Emails and phones are hashed before upload. Stale buyer exclusions are synced by the agent on its own.</div>`;
+  }
+  setHTML("trBody", h);
 }
 let SKT = "marg", SK = null, SK_FOR = null, AUDIT = null, GOAL = null;
 async function loadSkills(force) {
@@ -480,6 +523,7 @@ async function load() {
   render();
   loadChannels(false);
   loadSkills(false);
+  loadTracking(false);
   renderRules();
   if (!TM_T) { TMB = null; loadTM(); }
 }
@@ -510,6 +554,8 @@ document.addEventListener("click", async (ev) => {
     return;
   }
   if (ev.target.id === "tmNow") { TM_T = null; $("tmSlider").value = 1000; TMB = null; return loadTM(); }
+  const trb = ev.target.closest("#trTabs button");
+  if (trb) { TRT = trb.dataset.tr; return renderTracking(); }
   const sb = ev.target.closest("#skTabs button");
   if (sb) { SKT = sb.dataset.sk; return loadSkills(false); }
   if (ev.target.id === "audBtn") {
@@ -538,7 +584,7 @@ document.addEventListener("click", async (ev) => {
 });
 $("run").onclick = async () => {
   const r = await fetch("/api/run", {method: "POST", body: "{}"}); const j = await r.json();
-  CH_FOR = null; SK_FOR = null;
+  CH_FOR = null; SK_FOR = null; TR_FOR = null;
   toast(j.halted ? "Agent is halted. Nothing ran." : `Run ${j.run_id}: ${j.applied} applied, ${j.proposed} proposed, ${j.denied} denied${j.breaker_trips ? ", circuit breaker tripped" : ""}`, !j.halted);
   load();
 };

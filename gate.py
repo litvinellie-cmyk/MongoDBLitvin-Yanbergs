@@ -16,7 +16,8 @@ from platforms import utcnow
 from policy import action_context, evaluate, roles_for
 
 AGENT_ID = "agent:budget-bot"
-ITEM_ACTIONS = {"pause_keyword", "resume_keyword", "reply_review", "add_negative", "remove_negative"}
+ITEM_ACTIONS = {"pause_keyword", "resume_keyword", "reply_review", "add_negative", "remove_negative",
+                "fix_utm", "set_frequency_cap", "sync_exclusions"}
 
 
 def new_action_id() -> str:
@@ -186,6 +187,10 @@ def perform(db, platform, account, campaign_id, action, reason, *, actor_id, act
             platform.add_negative(account, campaign_id)
         elif t == "remove_negative":
             platform.remove_negative(account, campaign_id)
+        elif t in ("fix_utm", "set_frequency_cap"):
+            platform.set_item_field(account, campaign_id, action["field"], action["new"])
+        elif t == "sync_exclusions":
+            platform.sync_now(account, campaign_id)
         else:
             raise ValueError(f"unsupported action {t}")
         if t in ITEM_ACTIONS:

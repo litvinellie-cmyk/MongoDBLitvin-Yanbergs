@@ -38,7 +38,8 @@ VALIDATED = {
             "action": {"bsonType": "object", "required": ["type"],
                        "properties": {"type": {"enum": ["set_budget", "pause", "resume", "set_targeting",
                                                          "pause_keyword", "resume_keyword", "reply_review",
-                                                         "add_negative", "remove_negative"]}}},
+                                                         "add_negative", "remove_negative", "fix_utm",
+                                                         "set_frequency_cap", "sync_exclusions"]}}},
             "reason": {"bsonType": "object", "required": ["text", "numbers"]},
         },
     },
@@ -74,7 +75,8 @@ VALIDATED = {
     },
 }
 PLAIN = ["clients", "policy_versions", "memories", "competitor_ads", "ai_visibility", "seo_keywords", "reviews",
-         "creatives", "products", "search_terms", "experiments", "leads", "brand_docs", "sandbox_campaigns", "controls", "runs"]
+         "creatives", "products", "search_terms", "experiments", "ads", "capi_health", "audiences",
+         "audience_syncs", "leads", "brand_docs", "sandbox_campaigns", "controls", "runs"]
 
 INDEXES = {
     "proposals": [([("client_id", 1), ("status", 1), ("created_at", -1)], {}),

@@ -61,6 +61,15 @@ Keyword pauses and review replies use the same gate, approval roles, verificatio
 | Rules in plain English | Staff type a rule such as "never spend more than $150 a day on dental clients" or "always ask before pausing anything on Reddit". It becomes a draft policy with a plain readback of exactly what it will do. Only the agency owner can switch it on or retire it, and every version is stored in `policy_versions`. The parser covers common agency rules; with an LLM key the same draft and approve flow would accept any wording, and the safety comes from a human approving the readback |
 | Time machine | Drag a slider to any past moment and see what the agent knew then: rules in force, kill switch state, budgets then vs now, what was waiting for a human, and the last events. Rebuilt from `policy_versions`, `audit_events`, `change_log` and `proposals` |
 
+## Tracking and audiences
+
+| Tab | What it does | Agent action |
+|---|---|---|
+| UTM audit | Checks every ad's link against one naming rule (source, medium, campaign, content, lowercase) and catches typos like "facebok", missing tags and capitals that split GA4 reports | Fixes broken links on its own (tracking only, no spend change), logged and undoable |
+| Conversions API | Per platform: server vs browser events, deduplication by event ID, event match quality, and how many orders keep the click ID (fbclid, gclid, ttclid, rdt_cid) for offline conversions | Flags missing or weak setups |
+| Retargeting ladder | Homepage visitors, product viewers, cart, checkout, past buyers: each with its own window, message, budget, frequency and cost per sale | Overexposed tiers get a lower budget, after staff approval |
+| Audience sync | Shopify buyers, Klaviyo segments and top customers pushed to the ad platforms (hashed), with match rate and last sync | Stale buyer exclusions are synced on its own |
+
 ## Optimization skills
 
 | Skill | What it does |

@@ -137,6 +137,14 @@ def undo(db, platforms, change_id, actor_id: str) -> dict:
     a = ch["action"]
     if a["type"] == "reply_review":
         return {"ok": False, "error": "A public review reply can't be taken back automatically. Edit it on the platform."}
+    if a["type"] == "sync_exclusions":
+        return {"ok": False, "error": "A sync only refreshes who is excluded. There is nothing to undo."}
+    if a["type"] in ("fix_utm", "set_frequency_cap"):
+        reverse = {**a, "old": a["new"], "new": a["old"]}
+        reason = {"text": f"Undo of change {ch['_id']} ({ch['reason']['text']})", "numbers": {"reverts": str(ch["_id"])}}
+        out = gate.attempt(db, platform, account, {"campaign_id": ch["campaign_id"], "tags": []}, reverse, reason,
+                           actor_id=actor_id, mode="rollback", reverts=str(ch["_id"]))
+        return {"ok": out["effect"] == "allow" and out["result"]["ok"], **out}
     if a["type"] in gate.ITEM_ACTIONS:
         reverse = {"type": {"pause_keyword": "resume_keyword", "resume_keyword": "pause_keyword",
                             "add_negative": "remove_negative", "remove_negative": "add_negative"}[a["type"]],
