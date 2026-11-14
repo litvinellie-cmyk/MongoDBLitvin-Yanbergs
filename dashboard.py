@@ -21,6 +21,7 @@ import nl_rules
 import report
 import growth
 import timemachine
+import voice
 import tracking
 from datetime import datetime
 import skills
@@ -203,6 +204,24 @@ class Handler(BaseHTTPRequestHandler):
             q = parse_qs(u.query)
             t = datetime.fromisoformat(q.get("t", [""])[0].replace("Z", "+00:00"))
             return self._send(200, timemachine.state_at(DB, q.get("client", ["all"])[0], t))
+        if u.path == "/api/briefing":
+            from store import load_env
+            load_env()
+            cid = parse_qs(u.query).get("client", ["all"])[0]
+            return self._send(200, {"text": voice.briefing_text(DB, cid),
+                                    "elevenlabs": bool(os.environ.get("ELEVENLABS_API_KEY"))})
+        if u.path == "/api/briefing.mp3":
+            cid = parse_qs(u.query).get("client", ["all"])[0]
+            try:
+                audio = voice.speak(voice.briefing_text(DB, cid))
+            except Exception as e:
+                return self._send(502, {"error": f"ElevenLabs: {e}"})
+            if not audio:
+                return self._send(404, {"error": "No ElevenLabs key set."})
+            import gate
+            gate.audit(DB, "briefing_spoken", actor_id="agent:budget-bot", client_id=None if cid == "all" else cid,
+                       system="elevenlabs")
+            return self._send(200, audio, "audio/mpeg")
         if u.path == "/api/growth":
             cid = parse_qs(u.query).get("client", ["all"])[0]
             if cid == "all":

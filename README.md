@@ -19,6 +19,10 @@ Everything in this repository was written on **November 14, 2026, during Agents 
 
 **Demo video:** _add the link here after recording_
 
+## Voice briefing with ElevenLabs
+
+**Play briefing** reads a short spoken update in an ElevenLabs voice, written from live Atlas data: goal pace per client, how many decisions wait for approval and the most important one, what the agent changed on its own, any client paused by the circuit breaker, and whether the agent has earned or lost autonomy. Useful for agency owners and for business owners who'd rather listen than read. Read only: it never changes anything. Set `ELEVENLABS_API_KEY` in `.env` (optional `ELEVENLABS_VOICE_ID`); without a key the browser's built-in voice is used and the panel says so.
+
 ## Real actions on a second system: GitHub Issues
 
 The ad accounts are simulated so no real money moves, but the approval workflow runs on **real GitHub**:

@@ -105,6 +105,8 @@ body.simple .agency-only { display: none !important; }
 .setupgrid input, .setupgrid select { font: inherit; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
 label.chk { display: flex; gap: 6px; align-items: center; font-size: 14px; color: var(--ink); }
 pre.code { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px; font-size: 12px; overflow-x: auto; }
+#briefBox .brief { margin: 16px 20px 0; padding: 12px 16px; border-radius: 12px; background: var(--allow-bg); color: var(--ink); border: 1px solid var(--allow); }
+#briefBox .brief b { color: var(--allow); }
 #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); max-width: 90vw;
   padding: 10px 16px; border-radius: 10px; font-weight: 500; display: none; z-index: 5; }
 dialog { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--ink);
@@ -132,10 +134,12 @@ code { font-size: 12px; }
     <a id="reportLink" class="btnlink" target="_blank">Client report</a>
     <a id="exportLink" class="btnlink agency-only">Export decision log</a>
     <span id="acc" class="pill on"></span>
+    <button id="briefBtn" title="The agent reads you a short spoken update">▶ Play briefing</button>
     <button id="spikeBtn" title="Demo: one campaign starts spending 4x too fast">Simulate spend spike</button>
   </div>
 </header>
 <div id="banner"></div>
+<div id="briefBox" hidden><div class="alert brief"><div class="row"><b id="briefHead">Voice briefing</b><button id="briefStop">Stop</button></div><div id="briefText"></div><audio id="briefAudio"></audio></div></div>
 <main>
   <div>
     <section id="goalSec">
@@ -707,6 +711,22 @@ $("run").onclick = async () => {
   toast(j.halted ? "Agent is halted. Nothing ran." : `Run ${j.run_id}: ${j.applied} applied, ${j.proposed} proposed, ${j.denied} denied${j.breaker_trips ? ", circuit breaker tripped" : ""}`, !j.halted);
   load();
 };
+$("briefBtn").onclick = async () => {
+  $("briefBtn").textContent = "Preparing...";
+  const b = await (await fetch("/api/briefing?client=" + encodeURIComponent(CLIENT))).json();
+  $("briefText").textContent = b.text; $("briefBox").hidden = false;
+  try { speechSynthesis.cancel(); } catch (e) {}
+  if (b.elevenlabs) {
+    $("briefHead").textContent = "Voice briefing (ElevenLabs)";
+    const a = $("briefAudio"); a.src = "/api/briefing.mp3?client=" + encodeURIComponent(CLIENT) + "&t=" + Date.now();
+    try { await a.play(); } catch (e) { toast("Couldn't play the ElevenLabs audio: " + e.message, false); }
+  } else {
+    $("briefHead").textContent = "Voice briefing (browser voice: add an ElevenLabs key for the ElevenLabs voice)";
+    try { const u = new SpeechSynthesisUtterance(b.text); u.rate = 1.02; speechSynthesis.speak(u); } catch (e) {}
+  }
+  $("briefBtn").textContent = "▶ Play briefing";
+};
+$("briefStop").onclick = () => { try { speechSynthesis.cancel(); } catch (e) {} $("briefAudio").pause(); $("briefBox").hidden = true; };
 $("spikeBtn").onclick = async () => {
   if (CLIENT === "all") return toast("Pick one client first, then simulate the spike.", false);
   const r = await fetch("/api/spike", {method: "POST", headers: {"Content-Type": "application/json"},
