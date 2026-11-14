@@ -349,7 +349,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":
 const money = (n) => n == null ? "n/a" : "$" + Number(n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
 const t = (d) => d ? new Date(d).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"}) : "";
 let S = null;
-const OPEN_P = new Set();
+const OPEN_P = new Set(); let SHOW_ALL_P = false;
 const SEEN = new Set(); let SEEN_READY = false;
 // Only touch the DOM when content changed, so buttons are not swapped out mid click.
 const setHTML = (id, html) => { const el = $(id); if (el._last !== html) { el.innerHTML = html; el._last = html; } };
@@ -498,12 +498,21 @@ function render() {
     if (a.type === "pause") return `<span class="chg down">⏸ stop ${money(a.old)}/day</span>`;
     return a.label ? `<span class="chg">${esc(a.label)}</span>` : ""; };
   const name = (p) => /^(ad|aud|sync|keyword|review|term):/.test(p.campaign_id) ? esc(p.action.label || niceId(p.campaign_id)) : esc(p.campaign_id.split(":").pop().replace(/-/g, " "));
-  setHTML("props", S.proposals.length ? S.proposals.map((p) => `<div class="pcard${OPEN_P.has(String(p._id)) ? " open" : ""}" data-pid="${esc(p._id)}">
+  const urgency = (p) => { const a = p.action;
+    if (a.type === "pause") return 10000 + (a.old || 0);
+    if (a.type === "set_budget") return 5000 + Math.abs(a.new - a.old) * 30;
+    if (a.type === "set_targeting") return 3000;
+    if (a.type === "reply_review") return (p.reason.numbers || {}).stars <= 2 ? 4000 : 500;
+    return 1000; };
+  const sorted = [...S.proposals].sort((x, y) => urgency(y) - urgency(x));
+  const shown = SHOW_ALL_P ? sorted : sorted.slice(0, 5);
+  const moreBtn = sorted.length > 5 ? `<div style="text-align:center;margin-top:6px"><button class="link" id="showAllP">${SHOW_ALL_P ? "Show top 5 only" : "Show all " + sorted.length + " requests"}</button></div>` : "";
+  setHTML("props", sorted.length ? shown.map((p) => `<div class="pcard${OPEN_P.has(String(p._id)) ? " open" : ""}" data-pid="${esc(p._id)}">
       <div class="pmain">
         ${plat(p.platform)}
         <div class="pwhat"><b>${esc(TITLE[p.action.type] || p.action.type)}: ${name(p)}</b> ${what(p)}
           <div class="pwhy">${esc(p.reason.text.replace(/ Memory:.*$/, "").split(". ")[0])}.</div></div>
-        <div class="pbtns"><button class="link pmore">Details</button>
+        <div class="pbtns"><button class="link pmore">See more</button>
           <button data-decide="reject" data-id="${esc(p._id)}">Reject</button>
           <button class="ok" data-decide="approve" data-id="${esc(p._id)}">Approve</button></div>
       </div>
@@ -514,7 +523,7 @@ function render() {
         ${evidenceHTML(p.reason.evidence)}
         <div class="muted" style="margin-top:8px">Asked by ${esc(p.requested_by)} · <button class="link" data-explain="${esc(p.action_id)}">full history</button>${p.ticket ? ` · <a href="${esc(p.ticket.url)}" target="_blank" rel="noopener">GitHub #${p.ticket.number}</a>` : ""}</div>
       </div>
-    </div>`).join("") : '<div class="empty">Nothing waiting. 🎉</div>');
+    </div>`).join("") + moreBtn : '<div class="empty">Nothing waiting. 🎉</div>');
 
   setHTML("changes", "<tr><th>Time</th><th>Campaign</th><th>Change</th><th>By</th><th>Result</th><th></th></tr>" +
     (S.changes.map((c) => `<tr><td>${t(c.applied_at)}</td><td>${esc(/^(ad|aud|sync|keyword|review|term):/.test(c.campaign_id) ? (c.action.label || c.campaign_id) : c.campaign_id)}</td>
@@ -781,6 +790,7 @@ async function explain(id) {
   $("dlg").showModal();
 }
 document.addEventListener("click", (ev) => {
+  if (ev.target.id === "showAllP") { SHOW_ALL_P = !SHOW_ALL_P; render(); return; }
   const pm = ev.target.closest(".pmore");
   if (pm) { const c = pm.closest(".pcard"); c.classList.toggle("open");
     const id = c.dataset.pid; if (c.classList.contains("open")) OPEN_P.add(id); else OPEN_P.delete(id); return; }
