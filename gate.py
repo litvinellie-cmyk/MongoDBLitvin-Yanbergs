@@ -13,7 +13,7 @@ from platforms import utcnow
 from policy import action_context, evaluate, roles_for
 
 AGENT_ID = "agent:budget-bot"
-ITEM_ACTIONS = {"pause_keyword", "resume_keyword", "reply_review"}
+ITEM_ACTIONS = {"pause_keyword", "resume_keyword", "reply_review", "add_negative", "remove_negative"}
 
 
 def new_action_id() -> str:
@@ -113,6 +113,10 @@ def perform(db, platform, account, campaign_id, action, reason, *, actor_id, act
             platform.resume_keyword(account, campaign_id)
         elif t == "reply_review":
             platform.reply_review(account, campaign_id, action["new"])
+        elif t == "add_negative":
+            platform.add_negative(account, campaign_id)
+        elif t == "remove_negative":
+            platform.remove_negative(account, campaign_id)
         else:
             raise ValueError(f"unsupported action {t}")
         if t in ITEM_ACTIONS:

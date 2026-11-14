@@ -85,7 +85,7 @@ class SandboxPlatform(Platform):
     def _item(self, target):
         from bson import ObjectId
         kind, _id = target.split(":", 1)
-        coll = {"keyword": self.db.seo_keywords, "review": self.db.reviews}[kind]
+        coll = {"keyword": self.db.seo_keywords, "review": self.db.reviews, "term": self.db.search_terms}[kind]
         return coll, {"_id": ObjectId(_id)}
 
     def pause_keyword(self, account, target):
@@ -103,9 +103,22 @@ class SandboxPlatform(Platform):
         if coll.update_one(q, {"$set": {"reply": text, "replied_at": utcnow()}}).matched_count != 1:
             raise RuntimeError(f"{target} not found")
 
+    def add_negative(self, account, target):
+        coll, q = self._item(target)
+        if coll.update_one(q, {"$set": {"status": "negative"}}).matched_count != 1:
+            raise RuntimeError(f"{target} not found")
+
+    def remove_negative(self, account, target):
+        coll, q = self._item(target)
+        if coll.update_one(q, {"$set": {"status": "active"}}).matched_count != 1:
+            raise RuntimeError(f"{target} not found")
+
     def verify_item(self, target, action):
         coll, q = self._item(target)
         doc = coll.find_one(q) or {}
+        if action["type"] in ("add_negative", "remove_negative"):
+            want = "negative" if action["type"] == "add_negative" else "active"
+            return doc.get("status") == want, {"status": doc.get("status")}
         if action["type"] == "reply_review":
             return doc.get("reply") == action["new"], {"reply_posted": bool(doc.get("reply"))}
         want = "PAUSED" if action["type"] == "pause_keyword" else "ACTIVE"

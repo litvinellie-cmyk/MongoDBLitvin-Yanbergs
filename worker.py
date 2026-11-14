@@ -191,7 +191,9 @@ def run_once(db, platforms, now=None) -> dict:
 
     if not gate.halt_state(db, None):
         import channels
+        import skills
         channels.run(db, platforms, run_id, counts)
+        skills.run(db, platforms, run_id, counts)
     counts["outcomes"] = measure_outcomes(db, now)
     status = "halted" if counts["halted"] else "finished"
     db.runs.update_one({"_id": run_id, "status": "running"},
@@ -220,7 +222,9 @@ def seed(db, platforms, reset=False):
                                               acc.get("campaigns", []), backfill_days=14, now=now)
         print(f"seeded {client['name']} ({len(client['accounts'])} accounts)")
     import channels
+    import skills
     channels.seed(db, now)
+    skills.seed(db, now)
     from demo_data import MEMORIES
     if reset:
         db.memories.delete_many({})

@@ -134,6 +134,16 @@ code { font-size: 12px; }
       <div class="muted" style="margin-top:8px">Simulated data for the demo. Sources: ChatGPT, Perplexity, Gemini, Google AI Overviews and Claude answers; Meta Ad Library and Google Ads Transparency; Search Console; Google Business Profile.</div>
     </section>
     <section>
+      <h2>Optimization skills</h2>
+      <div class="tabs" id="skTabs">
+        <button data-sk="marg" class="on">Next dollar returns</button><button data-sk="goal">Goal planner</button>
+        <button data-sk="inv">Stock-aware ads</button><button data-sk="terms">Search terms</button>
+        <button data-sk="fun">Funnel leaks</button><button data-sk="exp">Experiments</button>
+        <button data-sk="anom">Anomaly radar</button><button data-sk="aud">Prospect audit (live)</button>
+      </div>
+      <div id="skBody"></div>
+    </section>
+    <section>
       <h2>Changes made</h2>
       <div class="scroll"><table id="changes"></table></div>
     </section>
@@ -186,7 +196,7 @@ async function post(path, body) {
   const j = await r.json();
   if (j.ok === false) toast(j.error || "Denied", false);
   else toast(j.status ? "Done: " + j.status : "Done", true);
-  CH_FOR = null;
+  CH_FOR = null; SK_FOR = null;
   await load();
   return j;
 }
@@ -370,11 +380,61 @@ function renderChannels() {
   }
   setHTML("chBody", h);
 }
+let SKT = "marg", SK = null, SK_FOR = null, AUDIT = null, GOAL = null;
+async function loadSkills(force) {
+  if (SKT !== "aud" && CLIENT === "all") return setHTML("skBody", '<div class="empty">Pick one client. The prospect audit works for any website.</div>');
+  if (SKT !== "aud" && (force || SK_FOR !== CLIENT || !SK)) {
+    SK = await (await fetch("/api/skills?client=" + encodeURIComponent(CLIENT))).json(); SK_FOR = CLIENT; GOAL = null;
+  }
+  renderSkills();
+}
+function renderSkills() {
+  document.querySelectorAll("#skTabs button").forEach((b) => b.classList.toggle("on", b.dataset.sk === SKT));
+  let h = "";
+  if (SKT === "aud") {
+    h = `<div class="row" style="gap:8px;justify-content:flex-start"><input id="audUrl" value="${AUDIT && AUDIT.input ? esc(AUDIT.input) : ""}" placeholder="prospect-website.com" style="font:inherit;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);min-width:240px">
+      <button id="audBtn" class="primary">Audit site</button></div>
+      <div class="muted" style="margin:6px 0">Live check of a real website: speed, SEO basics, AI search readiness (schema, FAQ, llms.txt, AI crawler access) and ad pixels. Use it in sales calls.</div>`;
+    if (AUDIT && AUDIT.ok === false) h += `<div class="mem warn">${esc(AUDIT.error)}</div>`;
+    if (AUDIT && AUDIT.ok) h += `<div><span class="kpi"><b>${AUDIT.score}/100</b>${esc(AUDIT.url)}</span></div>
+      <table><tr><th>Area</th><th>Check</th><th></th><th>Detail</th></tr>${AUDIT.checks.map((c) => `<tr><td>${esc(c.area)}</td><td>${esc(c.check)}</td><td>${c.ok ? '<span class="badge allow">PASS</span>' : '<span class="badge deny">FIX</span>'}</td><td class="muted">${esc(c.detail)}</td></tr>`).join("")}</table>`;
+    return setHTML("skBody", h);
+  }
+  if (!SK || SK.needs_client) return;
+  if (SKT === "marg") {
+    const m = SK.marginal;
+    h = `${m.suggestion ? `<div class="mem"><b>Suggested shift:</b> ${esc(m.suggestion.text)}</div>` : '<div class="mem">Budgets are already balanced: no campaign\'s next lead is much cheaper than another\'s.</div>'}
+      <div class="scroll"><table><tr><th>Campaign</th><th>Platform</th><th>Budget/day</th><th>Avg CPA</th><th>Next lead costs</th><th>+$10/day buys</th></tr>
+      ${m.campaigns.slice().sort((a, b) => (a.marginal_cpa || 1e9) - (b.marginal_cpa || 1e9)).map((c) => `<tr><td>${esc(c.name)}</td><td>${plat(c.platform)}</td><td>${money(c.budget)}</td><td>${money(c.cpa)}</td><td>${money(c.marginal_cpa)}</td><td>${c.next10_leads_week ? c.next10_leads_week + " leads/week" : "n/a"}</td></tr>`).join("")}</table></div>
+      <div class="muted">${esc(m.assumption)}</div>`;
+  } else if (SKT === "goal") {
+    h = `<div class="row" style="gap:8px;justify-content:flex-start">Weekly goal <input id="goalIn" type="number" min="1" value="${GOAL ? GOAL.goal : ""}" placeholder="e.g. 180" style="font:inherit;width:110px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink)"> <button id="goalBtn" class="primary">Plan it</button></div>`;
+    if (GOAL && GOAL.ok) h += `<div class="mem" style="margin-top:10px">${esc(GOAL.text)}</div>
+      <div style="margin-top:8px"><span class="kpi"><b>${money(GOAL.needed_spend_week)}</b>needed per week</span><span class="kpi"><b>${money(GOAL.needed_budget_day)}</b>per day</span><span class="kpi"><b>${money(GOAL.blended_cpa_at_goal)}</b>cost per result at goal</span><span class="kpi"><b>${GOAL.current_leads_week}</b>results now</span></div>`;
+    else if (GOAL) h += `<div class="mem warn">${esc(GOAL.error)}</div>`;
+  } else if (SKT === "inv") {
+    h = SK.inventory.length ? `<table><tr><th>Product</th><th>Stock</th><th>Advertised by</th><th>Budget/day</th><th>Action</th></tr>${SK.inventory.map((p) => `<tr><td>${esc(p.name)}</td><td>${p.stock}</td><td>${esc(p.campaign)} (${esc(p.campaign_status)})</td><td>${money(p.budget)}</td><td>${p.verdict === "pause ads" ? '<span class="badge deny">PAUSE ADS</span> sent for approval' : p.verdict.startsWith("low") ? '<span class="badge pending">LOW STOCK</span> don\'t scale' : '<span class="badge allow">' + esc(p.verdict.toUpperCase()) + "</span>"}</td></tr>`).join("")}</table><div class="muted">From Shopify inventory. Ads for sold out products waste money and annoy customers.</div>` : '<div class="empty">No store connected for this client.</div>';
+  } else if (SKT === "terms") {
+    h = SK.terms.length ? `<table><tr><th>Search term</th><th>Clicks</th><th>Cost 7d</th><th>Conv.</th><th>CPA</th><th></th></tr>${SK.terms.map((t) => `<tr><td>${esc(t.term)}</td><td>${t.clicks}</td><td>${money(t.cost_7d)}</td><td>${t.conversions}</td><td>${money(t.cpa)}</td><td>${t.verdict === "waste" ? '<span class="badge deny">ADD NEGATIVE</span>' : t.verdict === "negative" ? '<span class="badge info">NEGATIVE</span>' : '<span class="badge allow">KEEP</span>'}</td></tr>`).join("")}</table><div class="muted">Wasted terms go to the approval queue as negative keywords. Waste this week: ${money(SK.terms.filter((t) => t.verdict === "waste").reduce((a, t) => a + t.cost_7d, 0))}.</div>` : '<div class="empty">No Google search campaigns for this client.</div>';
+  } else if (SKT === "fun") {
+    const f = SK.funnel;
+    h = `${f.tip ? `<div class="mem warn">${esc(f.tip)}</div>` : ""}<table><tr><th>Step</th><th>People</th><th>From previous step</th><th>Benchmark</th></tr>${f.steps.map((x) => `<tr><td>${esc(x.step)}</td><td>${x.count.toLocaleString()}</td><td>${x.rate}%</td><td>${x.benchmark != null ? x.benchmark + "% " + (x.gap < 0 ? '<span class="badge deny">' + x.gap + " pts</span>" : '<span class="badge allow">+' + x.gap + " pts</span>") : ""}</td></tr>`).join("")}</table>`;
+  } else if (SKT === "exp") {
+    const e = SK.experiments;
+    h = `<div class="mem"><b>Next test:</b> ${esc(e.next.name)}. ${esc(e.next.text)}</div>
+      <table><tr><th>Experiment</th><th>Hypothesis</th><th>Status</th><th>Result</th></tr>${e.past.map((x) => `<tr><td>${esc(x.name)}</td><td>${esc(x.hypothesis)}</td><td><span class="badge ${x.status === "won" ? "allow" : x.status === "lost" ? "deny" : "pending"}">${esc(x.status.toUpperCase())}</span></td><td class="muted">${esc(x.result)}</td></tr>`).join("")}</table>
+      <div class="muted">Every test is stored in Atlas, so what the agency learned stays when people leave.</div>`;
+  } else if (SKT === "anom") {
+    h = SK.anomalies.length ? SK.anomalies.map((a) => `<div class="mem warn">${plat(a.platform)} <b>${esc(a.campaign)}</b>: ${esc(a.text)}</div>`).join("") : '<div class="mem">No unusual CPC, CTR, CPM or spend pace today compared with the last 14 days.</div>';
+  }
+  setHTML("skBody", h);
+}
 async function load() {
   const r = await fetch("/api/state?client=" + encodeURIComponent(CLIENT));
   S = await r.json();
   render();
   loadChannels(false);
+  loadSkills(false);
 }
 async function explain(id) {
   const x = await (await fetch("/api/explain?id=" + encodeURIComponent(id))).json();
@@ -394,6 +454,18 @@ async function explain(id) {
   $("dlg").showModal();
 }
 document.addEventListener("click", async (ev) => {
+  const sb = ev.target.closest("#skTabs button");
+  if (sb) { SKT = sb.dataset.sk; return loadSkills(false); }
+  if (ev.target.id === "audBtn") {
+    const u = document.getElementById("audUrl").value; ev.target.textContent = "Checking...";
+    AUDIT = await (await fetch("/api/audit-site?url=" + encodeURIComponent(u))).json(); AUDIT.input = u;
+    return renderSkills();
+  }
+  if (ev.target.id === "goalBtn") {
+    const g = document.getElementById("goalIn").value;
+    GOAL = await (await fetch(`/api/goal?client=${encodeURIComponent(CLIENT)}&goal=${encodeURIComponent(g)}`)).json(); GOAL.goal = g;
+    return renderSkills();
+  }
   const tb = ev.target.closest("#chTabs button");
   if (tb) { TAB = tb.dataset.tab; return renderChannels(); }
   const card = ev.target.closest(".ccard");
@@ -410,7 +482,7 @@ document.addEventListener("click", async (ev) => {
 });
 $("run").onclick = async () => {
   const r = await fetch("/api/run", {method: "POST", body: "{}"}); const j = await r.json();
-  CH_FOR = null;
+  CH_FOR = null; SK_FOR = null;
   toast(j.halted ? "Agent is halted. Nothing ran." : `Run ${j.run_id}: ${j.applied} applied, ${j.proposed} proposed, ${j.denied} denied${j.breaker_trips ? ", circuit breaker tripped" : ""}`, !j.halted);
   load();
 };

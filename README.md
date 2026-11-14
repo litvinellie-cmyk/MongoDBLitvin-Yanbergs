@@ -52,6 +52,19 @@ Each client has a **Channels** section with six tabs (simulated data in the demo
 
 Keyword pauses and review replies use the same gate, approval roles, verification and audit trail as budget changes.
 
+## Optimization skills
+
+| Skill | What it does |
+|---|---|
+| Next dollar returns | Estimates what the *next* $10 a day buys in each campaign (marginal cost per lead, diminishing returns stated as an assumption) and suggests shifting money to where it works hardest |
+| Goal planner | "To get 180 orders a week, plan about $8,000 a week": spend needed for a goal, with the rising cost per result |
+| Stock-aware ads | Reads Shopify stock; ads for sold out products are proposed for pausing through the approval queue |
+| Search term mining | Finds search terms that cost money and never convert; proposes negative keywords through the approval queue |
+| Funnel leaks | Click to purchase (or booking) funnel vs benchmarks, with the biggest leak and a concrete fix |
+| Experiments | Registry of past tests in Atlas, plus the next test with the sample size and weeks needed (95% confidence, 80% power) |
+| Anomaly radar | Today's CPC, CTR, CPM and spend pace vs the last 14 days |
+| Prospect audit (live) | Fetches any real website and checks speed, SEO basics, AI search readiness (schema, FAQ, llms.txt, AI crawler access in robots.txt) and ad pixels. For sales calls |
+
 ## Three problems agencies actually have
 
 | Problem | What the agent does | MongoDB feature |
@@ -72,7 +85,8 @@ Keyword pauses and review replies use the same gate, approval roles, verificatio
 7. On Harbour, show the TikTok "ugc-videos" card: **Memory changed this decision**, because 3 similar TikTok increases made things worse.
 8. Click **Client report** to show what the client sees: plain language, no jargon.
 9. Open **Channels**: AI search visibility, the competitor ads, the blocked "Perfect for young families" housing ad in Creative check.
-10. Switch to **Northside Realty**: the agent's age targeting was **denied** by the housing ad rules. Click **Simulate spend spike**: the circuit breaker halts Northside on its own, with a red banner explaining why.
+10. Open **Optimization skills**: next dollar returns, then run a live **Prospect audit** on any real website.
+11. Switch to **Northside Realty**: the agent's age targeting was **denied** by the housing ad rules. Click **Simulate spend spike**: the circuit breaker halts Northside on its own, with a red banner explaining why.
 
 ## How it fits together
 

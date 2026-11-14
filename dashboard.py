@@ -18,6 +18,7 @@ from urllib.parse import parse_qs, urlparse
 import memory
 import ops
 import report
+import skills
 from evidence import kpis
 from platforms import PLATFORM_LABELS, build_platforms, utcnow
 from rules import merged_settings
@@ -122,6 +123,14 @@ def channels_state(cid: str) -> dict:
             "tracking": channels.tracking_health(DB, cid)}
 
 
+def skills_state(cid: str) -> dict:
+    if cid == "all":
+        return {"needs_client": True}
+    return {"marginal": skills.marginal_returns(DB, cid), "inventory": skills.inventory(DB, cid),
+            "terms": skills.search_terms(DB, cid), "funnel": skills.funnel(cid),
+            "experiments": skills.experiments(DB, cid), "anomalies": skills.anomalies(DB, cid)}
+
+
 def spike(client_id):
     """Demo: one campaign starts burning money 4x faster, then the agent runs."""
     if not client_id:
@@ -165,6 +174,14 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(export_csv(cid))
             return
+        if u.path == "/api/skills":
+            cid = parse_qs(u.query).get("client", ["all"])[0]
+            return self._send(200, skills_state(cid))
+        if u.path == "/api/goal":
+            q = parse_qs(u.query)
+            return self._send(200, skills.goal_plan(DB, q.get("client", [""])[0], float(q.get("goal", ["0"])[0] or 0)))
+        if u.path == "/api/audit-site":
+            return self._send(200, skills.prospect_audit(parse_qs(u.query).get("url", [""])[0]))
         if u.path == "/api/channels":
             cid = parse_qs(u.query).get("client", ["all"])[0]
             return self._send(200, channels_state(cid))
