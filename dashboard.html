@@ -891,7 +891,16 @@ $("run").onclick = async () => {
   toast(j.halted ? "Agent is halted. Nothing ran." : `Run finished: ${j.applied} applied, ${j.proposed} sent for approval, ${j.denied} blocked${j.breaker_trips ? ", circuit breaker tripped" : ""}`, !j.halted);
   if (!j.halted && j.proposed) document.getElementById("sec-approvals").scrollIntoView({behavior: "smooth"});
 };
+let SPEAKING = false;
+function stopBriefing() {
+  try { speechSynthesis.cancel(); } catch (e) {}
+  const a = $("briefAudio"); a.pause(); a.currentTime = 0;
+  SPEAKING = false; $("briefBtn").classList.remove("loading", "danger");
+  $("briefBtn").textContent = "▶ Play briefing"; $("briefBox").hidden = true;
+}
+$("briefAudio").onended = () => { SPEAKING = false; $("briefBtn").classList.remove("danger"); $("briefBtn").textContent = "▶ Play briefing"; };
 $("briefBtn").onclick = async () => {
+  if (SPEAKING) return stopBriefing();
   $("briefBtn").classList.add("loading"); $("briefBtn").textContent = "Preparing...";
   const b = await (await fetch("/api/briefing?client=" + encodeURIComponent(CLIENT))).json();
   $("briefText").textContent = b.text; $("briefBox").hidden = false;
@@ -902,11 +911,14 @@ $("briefBtn").onclick = async () => {
     try { await a.play(); } catch (e) { toast("Couldn't play the ElevenLabs audio: " + e.message, false); }
   } else {
     $("briefHead").textContent = "Voice briefing (browser voice: add an ElevenLabs key for the ElevenLabs voice)";
-    try { const u = new SpeechSynthesisUtterance(b.text); u.rate = 1.02; speechSynthesis.speak(u); } catch (e) {}
+    try { const u = new SpeechSynthesisUtterance(b.text); u.rate = 1.02;
+      u.onend = () => { SPEAKING = false; $("briefBtn").classList.remove("danger"); $("briefBtn").textContent = "▶ Play briefing"; };
+      speechSynthesis.speak(u); } catch (e) {}
   }
-  $("briefBtn").classList.remove("loading"); $("briefBtn").textContent = "▶ Play briefing";
+  $("briefBtn").classList.remove("loading");
+  SPEAKING = true; $("briefBtn").classList.add("danger"); $("briefBtn").textContent = "■ Stop briefing";
 };
-$("briefStop").onclick = () => { try { speechSynthesis.cancel(); } catch (e) {} $("briefAudio").pause(); $("briefBox").hidden = true; };
+$("briefStop").onclick = stopBriefing;
 $("spikeBtn").onclick = async () => {
   if (CLIENT === "all") return toast("Pick one client first, then simulate the spike.", false);
   const j = await runWithProgress("/api/spike", {client: CLIENT}, "Spend spike: agent is checking pace");
