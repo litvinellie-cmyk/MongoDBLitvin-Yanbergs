@@ -20,6 +20,8 @@ DEFAULT_SETTINGS = {
     "loss_multiple": 3.0,                  # spend this many x target with 0 leads -> propose pause
     "min_daily_budget": 5.0,
     "proposal_ttl_hours": 48,
+    "pace_limit": 2.0,                     # circuit breaker: spend > 2x today's expected pace
+    "pace_min_spend": 25.0,                # ignore tiny amounts early in the day
 }
 
 
@@ -42,7 +44,8 @@ class Action:
     auto: bool = False
 
     def as_doc(self) -> dict:
-        return {"type": self.type, "field": "daily_budget", "old": self.old, "new": self.new}
+        field_ = "targeting" if self.type == "set_targeting" else "daily_budget"
+        return {"type": self.type, "field": field_, "old": self.old, "new": self.new}
 
 
 def frequency_blocked(s: dict, edits_today: int, last_edit_at: datetime | None, now: datetime) -> bool:
@@ -119,3 +122,24 @@ def decide(
     )
     auto = bool(s["auto_mode"]) and size <= s["auto_apply_max_pct"] + 1e-9
     return Action(c["campaign_id"], "set_budget", budget, new, round(size, 1), reason, numbers, auto)
+
+
+def decide_targeting(stats: dict, s: dict, live: dict) -> Action | None:
+    """If one age band clearly converts cheaper, propose narrowing to it."""
+    best = (live.get("insights") or {}).get("best_age")
+    cur = live.get("targeting") or {}
+    if not best or live.get("status") != "ACTIVE":
+        return None
+    new = {"age_min": best["age_min"], "age_max": best["age_max"]}
+    if cur.get("age_min") == new["age_min"] and cur.get("age_max") == new["age_max"]:
+        return None
+    conv = int(stats.get("conversions", 0))
+    if conv < s["min_conversions_before_action"] or float(stats.get("spend", 0)) < s["min_spend_before_action"]:
+        return None
+    overall = stats["spend"] / conv
+    reason = (f"{new['age_min']} to {new['age_max']} year olds brought leads at ${best['cpl']:,.2f} "
+              f"over the last {s['window_days']} days, against ${overall:,.2f} for everyone. "
+              f"Narrow age targeting from {cur.get('age_min', 18)} to {cur.get('age_max', 65)} "
+              f"to {new['age_min']} to {new['age_max']}.")
+    numbers = {"segment_cpl": best["cpl"], "overall_cpl": round(overall, 2), "conversions": conv}
+    return Action(live["campaign_id"], "set_targeting", dict(cur), new, 0.0, reason, numbers, False)

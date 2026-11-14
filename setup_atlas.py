@@ -36,7 +36,7 @@ VALIDATED = {
             "status": {"enum": ["pending", "approved", "executing", "done", "failed",
                                 "rejected", "expired", "stale", "blocked"]},
             "action": {"bsonType": "object", "required": ["type"],
-                       "properties": {"type": {"enum": ["set_budget", "pause", "resume"]}}},
+                       "properties": {"type": {"enum": ["set_budget", "pause", "resume", "set_targeting"]}}},
             "reason": {"bsonType": "object", "required": ["text", "numbers"]},
         },
     },
@@ -53,7 +53,7 @@ VALIDATED = {
             "_id": {"bsonType": "string", "pattern": "^(agent|user):"},
             "kind": {"enum": ["agent", "human"]},
             "roles": {"bsonType": "array",
-                      "items": {"enum": ["agent", "approver", "admin", "viewer"]}},
+                      "items": {"enum": ["agent", "approver", "admin", "viewer", "breaker"]}},
             "active": {"bsonType": "bool"},
         },
     },
@@ -70,7 +70,7 @@ VALIDATED = {
         "properties": {"event": {"bsonType": "string"}, "at": {"bsonType": "date"}},
     },
 }
-PLAIN = ["clients", "leads", "brand_docs", "sandbox_campaigns", "controls", "runs"]
+PLAIN = ["clients", "memories", "leads", "brand_docs", "sandbox_campaigns", "controls", "runs"]
 
 INDEXES = {
     "proposals": [([("client_id", 1), ("status", 1), ("created_at", -1)], {}),
@@ -86,6 +86,8 @@ INDEXES = {
                      ([("campaign_id", 1), ("event", 1), ("at", -1)], {})],
     "metrics_snapshots": [([("meta.account_id", 1), ("meta.campaign_id", 1), ("ts", -1)], {})],
     "leads": [([("account_id", 1), ("campaign_id", 1), ("created_at", -1)], {})],
+    "memories": [([("expires_at", 1)], {"expireAfterSeconds": 0}),
+                 ([("client_id", 1), ("action_type", 1), ("platform", 1), ("direction", 1)], {})],
 }
 
 
@@ -121,7 +123,8 @@ def main():
     print("indexes ok")
 
     for coll, name, filters in [("change_log", "memory_vec", ["account_id", "action.type"]),
-                                ("brand_docs", "brand_vec", [])]:
+                                ("brand_docs", "brand_vec", []),
+                                ("memories", "memories_vec", ["client_id", "action_type", "platform"])]:
         try:
             if name in {i["name"] for i in db[coll].list_search_indexes()}:
                 continue

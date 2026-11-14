@@ -26,6 +26,14 @@ An agent manages ad budgets for an agency with many clients, across Facebook + I
 
 Demo clients (all made up): Harbour Coffee Co. (FB + IG, TikTok, Reddit, Shopify), Bright Smile Dental (Google, FB + IG), Northside Realty (FB + IG, Google).
 
+## Three problems agencies actually have
+
+| Problem | What the agent does | MongoDB feature |
+|---|---|---|
+| **Runaway spend.** A bug or bad bid burns a month of budget overnight. | **Circuit breaker:** when an account spends faster than 2x its expected pace for the hour, the breaker halts that client by itself and says why. Policy lets it halt, never resume: only a human restarts a client. | Policies as documents, audit trail |
+| **Ad law.** Housing ads can't target by age, gender or zip code (Special Ad Category). Health ads need review. One slip can get an ad account restricted. | **Compliance policies:** age targeting on a real estate client is denied for everyone, agency included. On a medical client it goes to a human compliance review. | Policies with `industry` conditions |
+| **Repeating mistakes.** Staff change, and nobody remembers that TikTok scaling backfired last month. | **Memory:** before acting, the agent recalls similar past moves for that client and their results. If most went badly, a policy sends the move to a human, so memory visibly changes behavior. Memories are scoped per client, expire after 180 days (TTL index), and can be forgotten by an approver, with the deletion logged. | Atlas Vector Search (`memories_vec`, with Voyage embeddings when `VOYAGE_API_KEY` is set), TTL index |
+
 ## Demo script (1 minute)
 
 0. Start in **All clients** to show the agency view, then click **Harbour Coffee Co.**
@@ -35,6 +43,8 @@ Demo clients (all made up): Harbour Coffee Co. (FB + IG, TikTok, Reddit, Shopify
 4. Click **explain** on that change to see the full reconstruction.
 5. Click **Halt agent**, then **Run agent now**. Nothing runs, and that's logged too.
 6. **Resume**, then **undo** the "pricey" change. The budget goes back to $160, with the undo linked to the original change.
+7. On Harbour, show the TikTok "ugc-videos" card: **Memory changed this decision**, because 3 similar TikTok increases made things worse.
+8. Switch to **Northside Realty**: the agent's age targeting was **denied** by the housing ad rules. Click **Simulate spend spike**: the circuit breaker halts Northside on its own, with a red banner explaining why.
 
 ## How it fits together
 

@@ -63,6 +63,11 @@ td.num { font-variant-numeric: tabular-nums; }
 .ev { display: grid; grid-template-columns: 62px 1fr; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line); }
 .ev time { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .scroll { overflow-x: auto; }
+#banner .alert { margin: 16px 20px 0; padding: 12px 16px; border-radius: 12px; background: var(--deny-bg);
+  color: var(--deny); border: 1px solid var(--deny); }
+#banner .alert b { display: block; font-size: 15px; margin-bottom: 4px; }
+.mem { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: var(--info-bg); color: var(--ink); font-size: 13px; }
+.mem.warn { background: var(--wait-bg); }
 #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); max-width: 90vw;
   padding: 10px 16px; border-radius: 10px; font-weight: 500; display: none; z-index: 5; }
 dialog { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--ink);
@@ -85,8 +90,10 @@ code { font-size: 12px; }
     <select id="actor"></select>
     <button id="run" class="primary">Run agent now</button>
     <button id="haltBtn" class="danger">Halt agent</button>
+    <button id="spikeBtn" title="Demo: one campaign starts spending 4x too fast">Simulate spend spike</button>
   </div>
 </header>
+<div id="banner"></div>
 <main>
   <div>
     <section>
@@ -101,6 +108,11 @@ code { font-size: 12px; }
     <section>
       <h2>Changes made</h2>
       <div class="scroll"><table id="changes"></table></div>
+    </section>
+    <section>
+      <h2>Agent memory (past decisions and results)</h2>
+      <div class="muted" style="margin-bottom:8px">Scoped to one client, expires after 180 days, and any approver can forget an entry.</div>
+      <div class="scroll"><table id="mems"></table></div>
     </section>
     <section>
       <h2>Connected accounts</h2>
@@ -165,6 +177,9 @@ function eventLine(e) {
       const tag = !r.ok ? '<span class="badge deny">FAILED</span>' : r.verified ? '<span class="badge allow">VERIFIED</span>' : '<span class="badge pending">UNVERIFIED</span>';
       return `${tag} ${esc(e.campaign_id)}${act}<div class="muted">${r.ok ? "platform now shows " + esc(JSON.stringify(r.observed)) : esc(r.error)}</div>`;
     }
+    case "circuit_breaker": return `<span class="badge deny">CIRCUIT BREAKER</span> ${who}<div class="muted">${esc(e.reason)}</div>`;
+    case "memory_recalled": return `<span class="badge ${e.warning ? "pending" : "info"}">MEMORY</span> ${who} ${esc(e.campaign_id)}<div class="muted">${esc(e.method)}: ${esc(e.summary || "no similar past moves")}</div>`;
+    case "memory_forgotten": return `<span class="badge info">FORGOT</span> ${who}<div class="muted">${esc(e.memory && e.memory.text)}</div>`;
     case "kill_switch": return `<span class="badge ${e.halted ? "deny" : "allow"}">${e.halted ? "HALTED" : "RESUMED"}</span> ${who} ${esc(e.reason || "")}`;
     case "action_blocked": return `<span class="badge deny">BLOCKED</span> ${who} ${esc(e.reason)}${act}`;
     default: return `<span class="badge info">${esc(e.event.replace(/_/g, " ").toUpperCase())}</span> ${who} ${esc(e.campaign_id || e.run_id || "")}${act}`;
@@ -191,6 +206,15 @@ function render() {
       <div style="margin-top:6px">${plats.map((p) => plat(p, {meta: "FB + IG", google: "Google", tiktok: "TikTok", reddit: "Reddit", shopify: "Shopify"}[p])).join(" ")}</div>
       <div class="muted" style="margin-top:4px">${S.pending_by_client[c._id] || 0} waiting for approval${S.halted_clients.includes(c._id) ? " · <b style='color:var(--deny);display:inline'>halted</b>" : ""}</div></div>`;
   }).join(""));
+  const be = (S.breaker_events || [])[0];
+  setHTML("banner", be && (S.halted_global || S.halted_clients.includes(be.client_id)) ?
+    `<div class="alert"><b>Circuit breaker stopped ${esc((S.clients.find((c) => c._id === be.client_id) || {}).name || be.client_id)} at ${t(be.at)}</b>${esc(be.reason)} Only a human can resume it.</div>` : "");
+  setHTML("mems", "<tr><th>When</th><th>Client</th><th>Past decision</th><th>Result</th><th></th></tr>" +
+    ((S.memories || []).map((m) => `<tr><td class="muted">${new Date(m.created_at).toLocaleDateString()}</td>
+      <td>${esc((S.clients.find((c) => c._id === m.client_id) || {}).name || m.client_id)}</td>
+      <td>${esc(m.text.replace(/\. Result:.*$/, ""))}<div class="muted">${esc(m.source)}</div></td>
+      <td>${m.verdict === "better" ? '<span class="badge allow">BETTER</span>' : m.verdict === "worse" ? '<span class="badge deny">WORSE</span>' : '<span class="badge info">' + esc(m.verdict.toUpperCase()) + "</span>"}</td>
+      <td><button class="link" data-forget="${esc(m._id)}">forget</button></td></tr>`).join("") || '<tr><td colspan="5" class="empty">No memories yet.</td></tr>'));
   setHTML("conns", "<tr><th>Client</th><th>Platform</th><th>Account</th><th>Mode</th></tr>" +
     S.connections.map((c) => `<tr><td>${esc(c.client)}</td><td>${plat(c.platform, c.label)}</td><td>${esc(c.name)}</td><td class="muted">${esc(c.mode)}</td></tr>`).join(""));
 
@@ -206,16 +230,19 @@ function render() {
       <td class="num">${c.conversions}</td><td class="num">${money(c.cpl)}<div class="muted">${money(c.target_cpl)}</div></td></tr>`).join(""));
 
   setHTML("props", S.proposals.length ? S.proposals.map((p) => `<div class="card">
-      <div class="row"><b>${plat(p.platform)} ${esc(p.campaign_id)}: ${esc(p.action.type)} ${p.action.new != null ? money(p.action.old) + " → " + money(p.action.new) : ""}</b>
+      <div class="row"><b>${plat(p.platform)} ${esc(p.campaign_id)}: ${esc(p.action.type)} ${p.action.type === "set_budget" ? money(p.action.old) + " → " + money(p.action.new) : p.action.type === "set_targeting" ? "ages " + p.action.new.age_min + " to " + p.action.new.age_max : ""}</b>
       <span class="muted">${esc(p.policy_id)}</span></div>
-      <div>${esc(p.reason.text)}</div>
+      <div>${esc(p.reason.text.replace(/ Memory:.*$/, ""))}</div>
+      ${p.reason.memory && p.reason.memory.summary ? `<div class="mem ${p.reason.memory.warning ? "warn" : ""}"><b>${p.reason.memory.warning ? "⚠ Memory changed this decision" : "Memory"}</b> (${esc(p.reason.memory.method)}): ${esc(p.reason.memory.summary)}
+        <div class="muted">${p.reason.memory.hits.map((h) => esc(h.text)).join("<br>")}</div></div>` : ""}
+      ${p.policy_why ? `<div class="muted" style="margin-top:6px">Why a human: ${esc(p.policy_why)}</div>` : ""}
       <div class="row" style="margin-top:8px"><span class="muted">asked by ${esc(p.requested_by)} · <button class="link" data-explain="${esc(p.action_id)}">${esc(p.action_id)}</button></span>
       <span><button data-decide="reject" data-id="${esc(p._id)}">Reject</button> <button class="ok" data-decide="approve" data-id="${esc(p._id)}">Approve</button></span></div>
     </div>`).join("") : '<div class="empty">Nothing waiting.</div>');
 
   setHTML("changes", "<tr><th>Time</th><th>Campaign</th><th>Change</th><th>By</th><th>Result</th><th></th></tr>" +
     (S.changes.map((c) => `<tr><td>${t(c.applied_at)}</td><td>${esc(c.campaign_id)}</td>
-      <td>${esc(c.action.type)} ${c.action.type === "set_budget" ? money(c.action.old) + " → " + money(c.action.new) : ""}${c.reverts ? ' <span class="tag">undo</span>' : ""}</td>
+      <td>${esc(c.action.type)} ${c.action.type === "set_budget" ? money(c.action.old) + " → " + money(c.action.new) : c.action.type === "set_targeting" ? "ages " + c.action.new.age_min + " to " + c.action.new.age_max : ""}${c.reverts ? ' <span class="tag">undo</span>' : ""}</td>
       <td>${esc(c.actor_id)}<div class="muted">${esc(c.mode)}${c.approval ? ", approved by " + esc(c.approval.approved_by) : ""}</div></td>
       <td>${c.result.ok ? (c.result.verified ? badge("allow").replace("ALLOW", "VERIFIED") : '<span class="badge pending">UNVERIFIED</span>') : badge("deny").replace("DENY", "FAILED")}</td>
       <td><button class="link" data-explain="${esc(c.action_id)}">explain</button>${c.result.ok && !c.reverts ? ` · <button class="link" data-undo="${esc(c._id)}">undo</button>` : ""}</td></tr>`).join("") ||
@@ -257,10 +284,20 @@ document.addEventListener("click", async (ev) => {
   if (b.dataset.explain) return explain(b.dataset.explain);
   if (b.dataset.decide) return post("/api/decide", {id: b.dataset.id, decision: b.dataset.decide});
   if (b.dataset.undo) return post("/api/undo", {id: b.dataset.undo});
+  if (b.dataset.forget) return post("/api/forget", {id: b.dataset.forget});
 });
 $("run").onclick = async () => {
   const r = await fetch("/api/run", {method: "POST", body: "{}"}); const j = await r.json();
-  toast(j.halted ? "Agent is halted. Nothing ran." : `Run ${j.run_id}: ${j.applied} applied, ${j.proposed} proposed, ${j.denied} denied`, !j.halted);
+  toast(j.halted ? "Agent is halted. Nothing ran." : `Run ${j.run_id}: ${j.applied} applied, ${j.proposed} proposed, ${j.denied} denied${j.breaker_trips ? ", circuit breaker tripped" : ""}`, !j.halted);
+  load();
+};
+$("spikeBtn").onclick = async () => {
+  if (CLIENT === "all") return toast("Pick one client first, then simulate the spike.", false);
+  const r = await fetch("/api/spike", {method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({client: CLIENT})});
+  const j = await r.json();
+  if (j.ok === false) toast(j.error, false);
+  else toast(j.breaker_trips ? "Spend spike detected. Circuit breaker halted the client." : "Spike simulated, breaker did not trip.", !!j.breaker_trips);
   load();
 };
 $("haltBtn").onclick = () => {

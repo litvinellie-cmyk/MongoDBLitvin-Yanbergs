@@ -22,6 +22,8 @@ DEMO_ACTORS = [
      "grants": [{"client_id": "harbour", "roles": ["approver"]}], "active": True},
     {"_id": "user:dental-owner", "kind": "human", "name": "Dr. Lee (Bright Smile owner)", "roles": [],
      "grants": [{"client_id": "brightsmile", "roles": ["approver"]}], "active": True},
+    {"_id": "agent:circuit-breaker", "kind": "agent", "name": "Circuit breaker", "roles": ["breaker"],
+     "grants": [], "active": True},
     {"_id": "user:guest", "kind": "human", "name": "Guest viewer", "roles": ["viewer"], "grants": [],
      "active": True},
 ]
@@ -124,6 +126,8 @@ def undo(db, platforms, change_id, actor_id: str) -> dict:
                    "old": live["daily_budget"], "new": a["old"]}
     elif a["type"] == "pause":
         reverse = {"type": "resume", "field": "status", "old": "PAUSED", "new": "ACTIVE"}
+    elif a["type"] == "set_targeting":
+        reverse = {"type": "set_targeting", "field": "targeting", "old": live.get("targeting"), "new": a["old"]}
     else:
         return {"ok": False, "error": f"cannot undo {a['type']}"}
     reason = {"text": f"Undo of change {ch['_id']} ({ch['reason']['text']})",

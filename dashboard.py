@@ -15,6 +15,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+import memory
 import ops
 from platforms import PLATFORM_LABELS, build_platforms, utcnow
 from rules import merged_settings
@@ -69,9 +70,26 @@ def state(client: str = "all") -> dict:
             {} if client == "all" else {"account_id": {"$in": acc_ids}}).sort("applied_at", -1).limit(20)),
         "events": list(DB.audit_events.find(ev_q).sort([("at", -1), ("_id", -1)]).limit(80)),
         "policies": list(DB.policies.find().sort("priority", 1)),
+        "memories": list(DB.memories.find(scoped, {"embedding": 0}).sort("created_at", -1).limit(30)),
+        "breaker_events": list(DB.audit_events.find({"event": "circuit_breaker", **scoped})
+                               .sort("at", -1).limit(3)),
         "pending_by_client": {c["_id"]: DB.proposals.count_documents({"status": "pending", "client_id": c["_id"]})
                               for c in clients},
     }
+
+
+def spike(client_id):
+    """Demo: one campaign starts burning money 4x faster, then the agent runs."""
+    if not client_id:
+        return {"ok": False, "error": "Pick one client first."}
+    acc_ids = [a["_id"] for a in DB.accounts.find({"client_id": client_id, "platform": {"$ne": "shopify"}})]
+    camp = DB.sandbox_campaigns.find_one({"account_id": {"$in": acc_ids}, "status": "ACTIVE"},
+                                         sort=[("daily_budget", -1)])
+    if not camp:
+        return {"ok": False, "error": "No active campaign to spike."}
+    PLATFORMS["sandbox"].simulate_spike(camp["_id"], 4.0, utcnow())
+    out = run_once(DB, PLATFORMS)
+    return {"ok": True, "spiked": camp["_id"], **out}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -109,6 +127,10 @@ class Handler(BaseHTTPRequestHandler):
                 out = ops.decide_proposal(DB, PLATFORMS, body["id"], body["decision"], actor)
             elif p == "/api/undo":
                 out = ops.undo(DB, PLATFORMS, body["id"], actor)
+            elif p == "/api/spike":
+                out = spike(body.get("client"))
+            elif p == "/api/forget":
+                out = memory.forget(DB, body["id"], actor)
             elif p == "/api/halt":
                 out = ops.set_halt(DB, actor, bool(body["halted"]), body.get("reason", ""),
                                    body.get("client") or None)

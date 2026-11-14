@@ -102,6 +102,16 @@ def measure_outcomes(db, now: datetime, days: int = 3) -> int:
             line = f" Outcome: CPL ${b} before, ${a} after ({verdict})."
         else:
             verdict, line = "unknown", " Outcome: not enough leads to judge."
+        if verdict in ("better", "worse", "flat") and e["action"]["type"] in ("set_budget", "pause"):
+            import memory
+            nums = e.get("reason", {}).get("numbers", {})
+            ratio = round(nums["cpl"] / nums["target_cpl"], 2) if nums.get("cpl") and nums.get("target_cpl") else None
+            old = e["action"].get("old") or 0
+            size = abs((e["action"].get("new") or 0) - old) / old * 100 if old and e["action"]["type"] == "set_budget" else 100.0
+            memory.remember(db, client_id=e.get("client_id"), platform=e.get("platform"),
+                            action_type=e["action"]["type"], direction=memory.direction_of(e["action"]),
+                            size_pct=round(size, 1), cpl_ratio=ratio, verdict=verdict,
+                            cpl_before=b, cpl_after=a, source=f"change {e['_id']}")
         db.change_log.update_one(
             {"_id": e["_id"]},
             {"$set": {"outcome": {"measured_at": now, "cpl_before": b, "cpl_after": a,

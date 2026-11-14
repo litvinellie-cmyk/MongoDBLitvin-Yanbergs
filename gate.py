@@ -73,9 +73,14 @@ def _verify(platform, account, campaign_id, action) -> tuple[bool, dict | None]:
         ok = c["status"] == "PAUSED"
     elif t == "resume":
         ok = c["status"] == "ACTIVE"
+    elif t == "set_targeting":
+        ok = all(c.get("targeting", {}).get(k) == v for k, v in action["new"].items())
     else:
         ok = False
-    return ok, {"daily_budget": c["daily_budget"], "status": c["status"]}
+    obs = {"daily_budget": c["daily_budget"], "status": c["status"]}
+    if t == "set_targeting":
+        obs["targeting"] = c.get("targeting")
+    return ok, obs
 
 
 def perform(db, platform, account, campaign_id, action, reason, *, actor_id, action_id,
@@ -99,6 +104,8 @@ def perform(db, platform, account, campaign_id, action, reason, *, actor_id, act
             platform.pause(account, campaign_id)
         elif t == "resume":
             platform.resume(account, campaign_id)
+        elif t == "set_targeting":
+            platform.set_targeting(account, campaign_id, action["new"])
         else:
             raise ValueError(f"unsupported action {t}")
         verified, observed = _verify(platform, account, campaign_id, action)
@@ -122,10 +129,11 @@ def perform(db, platform, account, campaign_id, action, reason, *, actor_id, act
 
 def attempt(db, platform, account, campaign, action, reason, *, actor_id, mode,
             action_id=None, run_id=None, on_behalf_of=None, approval=None,
-            reverts=None) -> dict:
+            reverts=None, extra_ctx: dict | None = None) -> dict:
     """check, then perform if allowed. Returns {effect, policy_id, why, action_id, result?}."""
     action_id = action_id or new_action_id()
     ctx = action_context(action, campaign, account)
+    ctx.update(extra_ctx or {})
     effect, pid, why = check(db, actor_id, ctx, action_id=action_id, run_id=run_id,
                              on_behalf_of=on_behalf_of)
     out = {"effect": effect, "policy_id": pid, "why": why, "action_id": action_id}

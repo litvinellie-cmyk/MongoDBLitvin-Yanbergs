@@ -26,6 +26,9 @@ class Platform:
     def resume(self, account: dict, campaign_id: str) -> None:
         raise NotImplementedError
 
+    def set_targeting(self, account: dict, campaign_id: str, targeting: dict) -> None:
+        raise NotImplementedError
+
 
 class MetaPlatform(Platform):
     """Meta Marketing API. Not wired yet.
@@ -81,6 +84,8 @@ class SandboxPlatform(Platform):
     def _today_totals(c: dict, day: str, frac: float) -> dict:
         budget = c["daily_budget"] if c["status"] == "ACTIVE" else 0.0
         spend = round(budget * frac * _noise(c["_id"], day, "s") ** 0.3, 2)
+        if c.get("spike_day") == day:  # demo: simulated runaway spend today
+            spend = round(spend * c.get("spike_multiplier", 1.0), 2)
         true_cpl = c["true_cpl"] * (max(c["daily_budget"], 1) / c["base_budget"]) ** 0.4
         # add a stable fraction so small daily numbers are not always floored to 0
         frac_up = _noise(c["_id"], day, "f") * 2 - 1.5  # [0, 1)
@@ -96,6 +101,7 @@ class SandboxPlatform(Platform):
             out.append({
                 "campaign_id": c["_id"], "name": c["name"], "status": c["status"],
                 "daily_budget": c["daily_budget"], "tags": c.get("tags", []),
+                "targeting": c.get("targeting", {}), "insights": c.get("insights", {}),
                 **self._today_totals(c, day, frac),
             })
         return out
@@ -115,6 +121,17 @@ class SandboxPlatform(Platform):
     def pause(self, account, campaign_id):
         self._set_status(account, campaign_id, "PAUSED")
 
+    def set_targeting(self, account, campaign_id, targeting):
+        r = self.col.update_one({"_id": campaign_id, "account_id": account["_id"]},
+                                {"$set": {"targeting": targeting}})
+        if r.matched_count != 1:
+            raise RuntimeError(f"sandbox campaign {campaign_id} not found")
+
+    def simulate_spike(self, campaign_id: str, multiplier: float, now: datetime) -> None:
+        """Demo only: make today's spend on one campaign run far ahead of pace."""
+        self.col.update_one({"_id": campaign_id}, {"$set": {
+            "spike_day": now.date().isoformat(), "spike_multiplier": multiplier}})
+
     def resume(self, account, campaign_id):
         self._set_status(account, campaign_id, "ACTIVE")
 
@@ -124,12 +141,16 @@ class SandboxPlatform(Platform):
         aid = account["_id"]
         db.accounts.replace_one({"_id": aid}, account, upsert=True)
         db.settings.replace_one({"_id": aid}, {"_id": aid, **settings}, upsert=True)
-        for name, budget, cpl, cpd, tags in campaigns:
+        for spec in campaigns:
+            name, budget, cpl, cpd, tags = spec[:5]
+            extra = spec[5] if len(spec) > 5 else {}
             self.col.replace_one(
                 {"_id": f"{aid}:{name}"},
                 {"_id": f"{aid}:{name}", "account_id": aid, "client_id": account["client_id"],
                  "name": name, "status": "ACTIVE", "daily_budget": budget, "base_budget": budget,
-                 "true_cpl": cpl, "clicks_per_dollar": cpd, "tags": tags},
+                 "true_cpl": cpl, "clicks_per_dollar": cpd, "tags": tags,
+                 "targeting": extra.get("targeting", {"age_min": 18, "age_max": 65}),
+                 "insights": extra.get("insights", {})},
                 upsert=True,
             )
         docs = []

@@ -17,8 +17,95 @@ from datetime import timedelta
 import gate
 from ops import seed_identity_and_policy
 from platforms import build_platforms, platform_for, utcnow
-from rules import decide, merged_settings
+import memory
+import ops
+from rules import decide, decide_targeting, merged_settings
 from store import campaign_stats, day_str, edit_history, get_db, has_open_proposal, measure_outcomes
+
+
+BREAKER_ID = "agent:circuit-breaker"
+
+
+def check_pace(db, account, live, budget_total, s, now, run_id) -> bool:
+    """Trip when today's spend is far ahead of where the daily budgets say it should be."""
+    frac = (now.hour * 60 + now.minute) / 1440
+    spent = sum(c["spend"] for c in live)
+    expected = budget_total * frac
+    if frac < 0.05 or spent < s["pace_min_spend"] or spent <= s["pace_limit"] * expected:
+        return False
+    # A human who resumed this client after the last trip today has seen it: don't re-trip.
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    last_trip = db.audit_events.find_one({"event": "circuit_breaker", "account_id": account["_id"],
+                                          "at": {"$gte": start}}, sort=[("at", -1)])
+    if last_trip and db.audit_events.find_one({"event": "kill_switch", "halted": False,
+                                               "client_id": account.get("client_id"),
+                                               "at": {"$gt": last_trip["at"]}}):
+        return False
+    ratio = spent / expected if expected else float("inf")
+    worst = max(live, key=lambda c: c["spend"] - c["daily_budget"] * frac)
+    reason = (f"{account['name']} spent ${spent:,.2f} so far today, {ratio:.1f}x the expected "
+              f"${expected:,.2f} at this hour. Biggest jump: {worst['name']} "
+              f"(${worst['spend']:,.2f} against a ${worst['daily_budget']:,.2f}/day budget).")
+    gate.audit(db, "circuit_breaker", actor_id=BREAKER_ID, run_id=run_id, client_id=account.get("client_id"),
+               account_id=account["_id"], campaign_id=worst["campaign_id"], reason=reason,
+               numbers={"spent_today": round(spent, 2), "expected": round(expected, 2),
+                        "ratio": round(ratio, 2), "limit": s["pace_limit"]})
+    out = ops.set_halt(db, BREAKER_ID, True, "Circuit breaker: " + reason, account.get("client_id"))
+    print(f"[circuit breaker] {reason} -> {out}")
+    return bool(out.get("ok"))
+
+
+def act(db, platform, account, camp, a, s, now, run_id, counts):
+    """Recall memory, ask the gate, then apply, queue or record the denial."""
+    cid = camp["campaign_id"]
+    client_id = account.get("client_id")
+    reason = {"text": a.reason, "numbers": a.numbers}
+    extra = {}
+    if a.type in ("set_budget", "pause"):
+        target = a.numbers.get("target_cpl") or 1
+        recalled = memory.recall(
+            db, client_id=client_id, platform=account["platform"], action_type=a.type,
+            direction=memory.direction_of(a.as_doc()), size_pct=a.size_pct,
+            cpl_ratio=round(a.numbers["cpl"] / target, 2) if a.numbers.get("cpl") else None)
+        warn, summary = memory.warning(recalled)
+        if recalled["hits"]:
+            reason["memory"] = {"method": recalled["method"], "summary": summary, "warning": warn,
+                                "hits": [{"text": h["text"], "verdict": h["verdict"],
+                                          "id": str(h["_id"])} for h in recalled["hits"]]}
+            reason["text"] += " " + summary
+            gate.audit(db, "memory_recalled", actor_id=gate.AGENT_ID, run_id=run_id, client_id=client_id,
+                       campaign_id=cid, method=recalled["method"], summary=summary, warning=warn,
+                       hits=[h["text"] for h in recalled["hits"]])
+        extra["memory_warning"] = warn
+
+    # Skip if this exact move was already denied today: no spamming the log.
+    if db.audit_events.find_one({"event": "policy_check", "campaign_id": cid, "effect": "deny",
+                                 "action_type": a.type, "context.new_budget": a.new if a.type == "set_budget" else None,
+                                 "at": {"$gte": now - timedelta(hours=24)}, "actor_id": gate.AGENT_ID}):
+        return None
+
+    out = gate.attempt(db, platform, account, camp, a.as_doc(), reason,
+                       actor_id=gate.AGENT_ID, mode="auto", run_id=run_id, extra_ctx=extra)
+    if out["effect"] == "allow":
+        counts["applied"] += 1
+        print(f"[applied] {cid}: {a.reason} -> {out['result']}")
+    elif out["effect"] == "require_approval":
+        db.proposals.insert_one({
+            "action_id": out["action_id"], "client_id": client_id, "account_id": account["_id"],
+            "platform": account["platform"], "campaign_id": cid,
+            "action": a.as_doc(), "size_pct": a.size_pct, "reason": reason,
+            "requested_by": gate.AGENT_ID, "policy_id": out["policy_id"], "policy_why": out["why"],
+            "run_id": run_id, "status": "pending", "created_at": now,
+            "expires_at": now + timedelta(hours=s["proposal_ttl_hours"]),
+        })
+        gate.audit(db, "proposal_created", actor_id=gate.AGENT_ID, action_id=out["action_id"],
+                   client_id=client_id, run_id=run_id, campaign_id=cid, policy_id=out["policy_id"])
+        counts["proposed"] += 1
+        print(f"[proposed by {out['policy_id']}] {cid}: {a.reason}")
+    else:
+        counts["denied"] += 1
+        print(f"[denied by {out['policy_id']}] {cid}: {out['why']}")
+    return out
 
 
 def run_once(db, platforms, now=None) -> dict:
@@ -61,6 +148,12 @@ def run_once(db, platforms, now=None) -> dict:
         live_by_id = {c["campaign_id"]: c for c in live}
         budget_total = sum(c["daily_budget"] for c in live if c["status"] == "ACTIVE")
 
+        # Circuit breaker: spend running far ahead of today's pace halts the client.
+        if live and not gate.halt_state(db, account["_id"], client_id):
+            tripped = check_pace(db, account, live, budget_total, s, now, run_id)
+            if tripped:
+                counts["breaker_trips"] = counts.get("breaker_trips", 0) + 1
+
         first = day_str(now - timedelta(days=s["window_days"] - 1))
         for stats in campaign_stats(db, account["_id"], first, day_str(now)):
             # Kill switch is checked between every step, not only at the start.
@@ -68,47 +161,20 @@ def run_once(db, platforms, now=None) -> dict:
                 counts["halted_accounts"] = counts.get("halted_accounts", 0) + 1
                 break
             cid = stats["campaign_id"]
-            if cid not in live_by_id or has_open_proposal(db, cid):
+            if cid not in live_by_id:
                 continue
             camp = live_by_id[cid]
             stats.update(status=camp["status"], daily_budget=camp["daily_budget"])
             edits_today, last_edit = edit_history(db, cid, now)
-            a = decide(stats, s, edits_today=edits_today, last_edit_at=last_edit,
-                       now=now, account_budget_total=budget_total)
-            if not a:
-                continue
-            reason = {"text": a.reason, "numbers": a.numbers}
-
-            # Skip if this exact move was already denied today: no spamming the log.
-            if db.audit_events.find_one({"event": "policy_check", "campaign_id": cid, "effect": "deny",
-                                         "context.new_budget": a.new, "at": {"$gte": now - timedelta(hours=24)},
-                                         "actor_id": gate.AGENT_ID}):
-                continue
-
-            out = gate.attempt(db, platform, account, camp, a.as_doc(), reason,
-                               actor_id=gate.AGENT_ID, mode="auto", run_id=run_id)
-            if out["effect"] == "allow":
-                counts["applied"] += 1
-                if out["result"]["ok"] and a.type == "set_budget":
+            wanted = [decide(stats, s, edits_today=edits_today, last_edit_at=last_edit,
+                             now=now, account_budget_total=budget_total),
+                      decide_targeting(stats, s, camp)]
+            for a in [w for w in wanted if w]:
+                if has_open_proposal(db, cid):
+                    break
+                out = act(db, platform, account, camp, a, s, now, run_id, counts)
+                if out and out["effect"] == "allow" and out["result"]["ok"] and a.type == "set_budget":
                     budget_total += a.new - a.old
-                print(f"[applied] {cid}: {a.reason} -> {out['result']}")
-            elif out["effect"] == "require_approval":
-                db.proposals.insert_one({
-                    "action_id": out["action_id"], "client_id": client_id, "account_id": account["_id"],
-                    "platform": account["platform"], "campaign_id": cid,
-                    "action": a.as_doc(), "size_pct": a.size_pct, "reason": reason,
-                    "requested_by": gate.AGENT_ID, "policy_id": out["policy_id"], "run_id": run_id,
-                    "status": "pending", "created_at": now,
-                    "expires_at": now + timedelta(hours=s["proposal_ttl_hours"]),
-                })
-                gate.audit(db, "proposal_created", actor_id=gate.AGENT_ID, action_id=out["action_id"],
-                           client_id=client_id,
-                           run_id=run_id, campaign_id=cid, policy_id=out["policy_id"])
-                counts["proposed"] += 1
-                print(f"[proposed] {cid}: {a.reason}")
-            else:
-                counts["denied"] += 1
-                print(f"[denied by {out['policy_id']}] {cid}: {out['why']}")
         if gate.halt_state(db, None):  # global stop: no more accounts
             counts["halted"] = True
             break
@@ -134,11 +200,19 @@ def seed(db, platforms, reset=False):
                                {k: v for k, v in client.items() if k != "accounts"}, upsert=True)
         for acc in client["accounts"]:
             account = {"_id": acc["_id"], "client_id": client["_id"], "platform": acc["platform"],
+                       "industry": client["industry"],
                        "adapter": "sandbox", "external_id": acc["_id"], "name": acc["name"],
                        "active": True}
             platforms["sandbox"].seed_account(db, account, acc.get("settings", {}),
                                               acc.get("campaigns", []), backfill_days=7, now=now)
         print(f"seeded {client['name']} ({len(client['accounts'])} accounts)")
+    from demo_data import MEMORIES
+    if reset:
+        db.memories.delete_many({})
+    for m in MEMORIES:
+        m = dict(m)
+        memory.remember(db, source="demo history", when=now - timedelta(days=m.pop("days_ago")), **m)
+    print(f"seeded {len(MEMORIES)} memories")
 
 
 def main():

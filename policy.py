@@ -13,12 +13,22 @@ DEFAULT_POLICIES = [
     {"_id": "deny-writes-to-store", "priority": 5, "roles": ["*"],
      "actions": ["set_budget", "pause", "resume"], "when": {"platform": "shopify"}, "effect": "deny",
      "why": "Shopify is a read only sales source. Nobody changes the store from here."},
+    {"_id": "housing-special-ad-category", "priority": 8, "roles": ["*"], "actions": ["set_targeting"],
+     "when": {"industry": "Real estate"}, "effect": "deny",
+     "why": "Housing ads are a Special Ad Category on Meta and Google: no age, gender or zip code "
+            "targeting. Breaking this can get the client's ad account restricted."},
     {"_id": "deny-protected-campaigns", "priority": 10, "roles": ["*"], "actions": ["*"],
      "when": {"campaign_tag": "protected"}, "effect": "deny",
      "why": "Campaigns tagged protected are hands off for every actor."},
     {"_id": "deny-budget-over-200", "priority": 20, "roles": ["*"], "actions": ["set_budget"],
      "when": {"new_budget_gt": 200}, "effect": "deny",
      "why": "No campaign may go above $200 a day without changing this policy."},
+    {"_id": "health-targeting-review", "priority": 30, "roles": ["agent"], "actions": ["set_targeting"],
+     "when": {"industry": "Medical"}, "effect": "require_approval",
+     "why": "Health ads need a human compliance review before any targeting change."},
+    {"_id": "memory-says-be-careful", "priority": 85, "roles": ["agent"], "actions": ["set_budget"],
+     "when": {"memory_warning": True}, "effect": "require_approval",
+     "why": "Similar past moves for this client made results worse, so a human decides this time."},
     {"_id": "reddit-agent-asks-first", "priority": 90, "roles": ["agent"], "actions": ["set_budget"],
      "when": {"platform": "reddit"}, "effect": "require_approval",
      "why": "Reddit is a new channel for these clients, so every agent move there needs a human."},
@@ -31,8 +41,11 @@ DEFAULT_POLICIES = [
     {"_id": "agent-pause-needs-human", "priority": 120, "roles": ["agent"], "actions": ["pause"],
      "when": {}, "effect": "require_approval",
      "why": "The agent may only propose pauses."},
-    {"_id": "approver-can-approve", "priority": 200, "roles": ["approver"], "actions": ["approve", "reject"],
-     "when": {}, "effect": "allow", "why": "Approvers decide on proposals."},
+    {"_id": "agent-targeting-needs-human", "priority": 130, "roles": ["agent"], "actions": ["set_targeting"],
+     "when": {}, "effect": "require_approval",
+     "why": "The agent may only propose audience targeting changes."},
+    {"_id": "approver-can-approve", "priority": 200, "roles": ["approver"], "actions": ["approve", "reject", "forget_memory"],
+     "when": {}, "effect": "allow", "why": "Approvers decide on proposals and can correct the agent's memory."},
     {"_id": "approver-operations", "priority": 210, "roles": ["approver"],
      "actions": ["set_budget"],
      "when": {"change_pct_lte": 50}, "effect": "allow",
@@ -40,6 +53,11 @@ DEFAULT_POLICIES = [
     {"_id": "approver-pause-resume", "priority": 215, "roles": ["approver"],
      "actions": ["pause", "resume"], "when": {}, "effect": "allow",
      "why": "Approvers may pause and resume campaigns, including undoing a pause."},
+    {"_id": "approver-targeting", "priority": 216, "roles": ["approver"], "actions": ["set_targeting"],
+     "when": {}, "effect": "allow", "why": "Approvers may change targeting, inside the compliance rules above."},
+    {"_id": "breaker-can-halt", "priority": 225, "roles": ["breaker"], "actions": ["halt"],
+     "when": {}, "effect": "allow",
+     "why": "The circuit breaker may stop a client on its own, but never restart one. Only a human can."},
     {"_id": "admin-kill-switch", "priority": 220, "roles": ["admin", "approver"],
      "actions": ["halt", "unhalt"], "when": {}, "effect": "allow",
      "why": "Admins and approvers can stop and restart the agent."},
@@ -59,7 +77,7 @@ def _when_holds(when: dict, ctx: dict) -> bool:
         elif key == "campaign_tag":
             if val not in (ctx.get("campaign_tags") or []):
                 return False
-        elif key in ("account_id", "client_id", "platform"):
+        elif key in ("account_id", "client_id", "platform", "industry", "memory_warning"):
             if ctx.get(key) != val:
                 return False
         else:
@@ -96,6 +114,7 @@ def action_context(action: dict, campaign: dict | None, account: dict) -> dict:
         "campaign_tags": (campaign or {}).get("tags", []),
         "campaign_id": (campaign or {}).get("campaign_id"), "account_id": account.get("_id"),
         "client_id": account.get("client_id"), "platform": account.get("platform"),
+        "industry": account.get("industry"),
     }
 
 
