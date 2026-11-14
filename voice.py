@@ -17,7 +17,7 @@ from datetime import timedelta
 
 from platforms import utcnow
 
-DEFAULT_VOICE = "21m00Tcm4TlvDq8ikWAM"  # a premade ElevenLabs voice; override with ELEVENLABS_VOICE_ID
+DEFAULT_VOICE = "EXAVITQu4vr4xnSDxMaL"  # "Sarah", a default voice that works on the free plan; override with ELEVENLABS_VOICE_ID
 MODEL = "eleven_flash_v2_5"
 
 
