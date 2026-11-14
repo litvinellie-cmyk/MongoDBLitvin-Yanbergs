@@ -44,9 +44,9 @@ th { color: var(--muted); font-weight: 500; font-size: 12px; }
 td.num { font-variant-numeric: tabular-nums; }
 .btnlink { font: inherit; border-radius: 8px; border: 1px solid var(--line); padding: 6px 10px; color: var(--ink); text-decoration: none; }
 .btnlink:hover { border-color: var(--muted); }
-details.ev { margin-top: 8px; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
-details.ev summary { cursor: pointer; font-weight: 600; font-size: 13px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; list-style: none; }
-details.ev summary::before { content: "▸"; } details.ev[open] summary::before { content: "▾"; }
+details.evd { margin-top: 8px; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+details.evd summary { cursor: pointer; font-weight: 600; font-size: 13px; display: flex; width: 100%; box-sizing: border-box; flex-wrap: wrap; gap: 8px; align-items: center; list-style: none; }
+details.evd summary::before { content: "▸"; } details.evd[open] summary::before { content: "▾"; }
 .evgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px 14px; margin: 8px 0; font-size: 13px; }
 .evgrid div span { display: block; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
 .risk-low { background: var(--allow-bg); color: var(--allow); } .risk-medium { background: var(--wait-bg); color: var(--wait); } .risk-high { background: var(--deny-bg); color: var(--deny); }
@@ -224,7 +224,7 @@ function evidenceHTML(ev) {
   if (!ev) return "";
   const k = ev.kpis || {}, b = ev.baseline || {}, im = ev.impact || {};
   const cell = (label, val) => `<div><span>${esc(label)}</span>${val}</div>`;
-  return `<details class="ev"><summary>Evidence <span class="badge risk-${esc(ev.risk)}">${esc((ev.risk || "").toUpperCase())} RISK</span>
+  return `<details class="evd"><summary>Evidence <span class="badge risk-${esc(ev.risk)}">${esc((ev.risk || "").toUpperCase())} RISK</span>
       ${ev.confidence_pct != null ? `<span class="badge info">${ev.confidence_pct}% CONFIDENT</span>` : ""}</summary>
     ${ev.confidence_text ? `<div style="margin-top:6px">${esc(ev.confidence_text)}</div>` : ""}
     <div class="evgrid">
@@ -458,7 +458,7 @@ async function loadTM() {
   TM = await (await fetch(`/api/tm?client=${encodeURIComponent(CLIENT)}&t=${encodeURIComponent(t.toISOString())}`)).json();
   const halts = TM.halts.length ? TM.halts.map((h) => `<span class="badge deny">HALTED ${esc(h.scope)}</span> by ${esc(h.by)}`).join(" ") : '<span class="badge allow">RUNNING</span>';
   const camps = TM.campaigns.filter((c) => c.changed_since);
-  setHTML("tmBody", `<div style="margin-bottom:8px">${halts} · ${TM.rules_active} rules in force · ${TM.changes_so_far} changes made so far · ${TM.waiting.length} waiting for a human</div>
+  setHTML("tmBody", `<div style="margin-bottom:8px">${halts} · ${TM.rules_active} rules in force · ${TM.changes_so_far} change${TM.changes_so_far === 1 ? "" : "s"} made so far · ${TM.waiting.length} waiting for a human</div>
     ${TM.custom_rules.length ? `<div class="mem"><b>Agency rules in force then:</b> ${TM.custom_rules.map((r) => esc(r.text)).join("; ")}</div>` : ""}
     ${camps.length ? `<div class="muted" style="margin-top:8px">Different then vs now:</div><table><tr><th>Campaign</th><th>Then</th><th>Now</th></tr>${camps.map((c) => `<tr><td>${esc(c.name)}</td><td>${money(c.budget)} · ${esc(c.status)}</td><td>${money(c.now_budget)} · ${esc(c.now_status)}</td></tr>`).join("")}</table>` : '<div class="muted" style="margin-top:8px">Budgets then were the same as now.</div>'}
     <div class="muted" style="margin-top:8px">Last events before this moment:</div>
