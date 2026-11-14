@@ -8,6 +8,17 @@ Track 1, Agents You Can Audit. Agents in Context Toronto, MongoDB hackathon, Nov
 
 An agent manages ad budgets for an agency with many clients, across Facebook + Instagram, Google Ads, TikTok and Reddit Ads, with Shopify connected as a read only sales source. It moves money between campaigns based on cost per lead. Every action it takes is tied to an identity, checked against a policy stored in MongoDB Atlas before it runs, verified against the ad platform afterwards, and written to an audit trail a reviewer can replay. A human can halt it mid run or undo any change.
 
+## Built during the hackathon
+
+Everything in this repository was written on **November 14, 2026, during Agents in Context Toronto** (hacking started 10:45 AM). The commit history shows it: the first code commit is at 11:49 AM and every feature after it is its own commit that day. No earlier project, template or starter code was used.
+
+| Ours, built today | Not ours |
+|---|---|
+| All Python and HTML in this repo: policy gate, policies, identities, audit trail, approvals, kill switch, circuit breaker, undo, explain, time machine, plain English rules, memory and learning, evidence, campaign doctor, goals, setup wizard, channels, skills, tracking and audiences, GitHub tickets, dashboard, client report | `pymongo` (MongoDB driver), MongoDB Atlas, the GitHub REST API, the Inter font from Google Fonts |
+| All demo data (the 3 clients, campaigns, competitors, reviews are made up) | Public ad library pages, linked to but not copied |
+
+**Demo video:** _add the link here after recording_
+
 ## Real actions on a second system: GitHub Issues
 
 The ad accounts are simulated so no real money moves, but the approval workflow runs on **real GitHub**:
@@ -146,16 +157,26 @@ Keyword pauses and review replies use the same gate, approval roles, verificatio
 
 | File | Role |
 |---|---|
-| `gate.py` | The only path to the ad platform: identity, kill switch, policy, send, verify, audit |
+| `gate.py` | The only path to any outside system: identity, kill switch, policy, send, verify, audit |
 | `policy.py` | Policy evaluation (pure, tested) and the default policies |
-| `rules.py` | When the agent wants to act: sample size, dead zone, step size, spend cap, edit frequency (pure, tested) |
-| `worker.py` | Agent loop and seeding |
+| `rules.py` | When the agent wants to act: sample size, dead zone, step size, spend cap, edit frequency |
+| `worker.py` | Agent loop, circuit breaker, data freshness gate, seeding |
 | `ops.py` | Approve, reject, execute, undo, halt, explain |
-| `dashboard.py` + `dashboard.html` | Demo UI on the standard library server, no extra installs |
-| `approvals.py` | The same operations from the command line |
-| `platforms.py` | Sandbox ad platform, plus Meta and Google adapters with their API calls noted |
-| `schemas.js` | Creates every collection, validator and index on Atlas |
-| `offline_demo.py` | Backup only: the same UI on an in-memory database |
+| `tickets.py` | Real GitHub issues for approvals and incidents |
+| `nl_rules.py` | Rules in plain English, owner approval, policy versions |
+| `timemachine.py` | State at any past moment |
+| `memory.py` | Client-scoped memory, Vector Search recall (with a Voyage key), forgetting |
+| `growth.py` | Setup wizard, goals, campaign doctor, earned autonomy, ad library links, AI search fixes |
+| `evidence.py` | KPIs and statistical evidence for every decision |
+| `channels.py` | AI search visibility, competitors, SEO vs paid, reviews, creative and tracking checks |
+| `skills.py` | Next dollar returns, goal planner, stock-aware ads, search terms, funnel, experiments, anomalies, live site audit |
+| `tracking.py` | UTM audit and fixes, Conversions API health, retargeting ladder, audience sync |
+| `report.py` | Plain language client report |
+| `dashboard.py`, `dashboard.html` | The app (standard library server) |
+| `platforms.py`, `demo_data.py` | Simulated ad platforms and demo clients; real adapters list their API calls |
+| `setup_atlas.py`, `schemas.js` | Collections, validators, indexes and Vector Search indexes |
+| `approvals.py` | Command line, including the Change Streams watcher |
+| `test_rules.py`, `test_policy.py` | Unit tests |
 
 ## Run it
 
@@ -177,7 +198,7 @@ A full agent run (3 clients, 8 accounts, all channels and skills) takes about 15
 
 ## Tests
 
-`python -m pytest test_rules.py test_policy.py` runs 19 tests on the decision rules and policy engine.
+`python -m pytest test_rules.py test_policy.py` runs 24 tests on the decision rules and policy engine.
 
 ## Limits
 
