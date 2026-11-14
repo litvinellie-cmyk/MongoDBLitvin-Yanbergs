@@ -107,6 +107,27 @@ label.chk { display: flex; gap: 6px; align-items: center; font-size: 14px; color
 pre.code { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px; font-size: 12px; overflow-x: auto; }
 #briefBox .brief { margin: 16px 20px 0; padding: 12px 16px; border-radius: 12px; background: var(--allow-bg); color: var(--ink); border: 1px solid var(--allow); }
 #briefBox .brief b { color: var(--allow); }
+body { font-size: 15px; line-height: 1.55; }
+h2 { font-size: 13px; }
+main { gap: 20px; padding: 20px 24px; max-width: 1400px; margin: 0 auto; }
+section { padding: 20px; margin-bottom: 20px; }
+th, td { padding: 10px 8px; }
+th { font-size: 12px; }
+.menuwrap { position: relative; }
+.menu { position: absolute; right: 0; top: calc(100% + 6px); background: var(--hdr-2); border: 1px solid var(--hdr-line); border-radius: 12px;
+  padding: 8px; display: grid; gap: 6px; min-width: 230px; z-index: 8; box-shadow: 0 12px 30px rgba(0, 0, 0, .3); animation: fadeIn .15s ease-out; }
+.menu[hidden] { display: none; }
+.menu button, .menu .btnlink { text-align: left; width: 100%; }
+.menu .pill { text-align: center; }
+section.fold > h2 { cursor: pointer; margin: 0; display: flex; align-items: center; gap: 8px; user-select: none; }
+section.fold > h2::before { content: "▸"; color: var(--muted); transition: transform .15s; }
+section.fold.open > h2::before { transform: rotate(90deg); }
+section.fold:not(.open) > h2 ~ * { display: none !important; }
+section.fold.open > h2 { margin-bottom: 12px; }
+section.fold:not(.open) { padding: 14px 20px; }
+.toolshead { display: flex; align-items: baseline; gap: 10px; margin: 8px 0 12px; }
+.toolshead h3 { margin: 0; font-size: 16px; }
+table.compact .x { display: none; }
 #nav { display: flex; gap: 4px; flex-wrap: wrap; width: 100%; margin-top: 4px; }
 #nav a { color: #c1c7c6; text-decoration: none; font-size: 13px; padding: 5px 10px; border-radius: 999px; transition: background .15s, color .15s; }
 #nav a:hover { background: var(--hdr-2); color: #fff; }
@@ -166,21 +187,22 @@ code { font-size: 12px; }
     <select id="client"></select>
     <label class="muted agency-only" for="actor">Acting as</label>
     <select id="actor" class="agency-only"></select>
-    <button id="modeBtn" title="Switch between the agency view and a simpler view for one business">Simple view</button>
-    <button id="setupBtn">New client setup</button>
     <button id="run" class="primary">Run agent now</button>
-    <button id="haltBtn" class="danger">Halt agent</button>
-    <a id="reportLink" class="btnlink" target="_blank">Client report</a>
-    <a id="exportLink" class="btnlink agency-only">Export decision log</a>
-    <span id="acc" class="pill on"></span>
     <button id="briefBtn" title="The agent reads you a short spoken update">▶ Play briefing</button>
-    <button id="spikeBtn" title="Demo: one campaign starts spending 4x too fast">Simulate spend spike</button>
+    <button id="haltBtn" class="danger">Halt agent</button>
+    <div class="menuwrap"><button id="moreBtn" aria-haspopup="true">More ▾</button>
+      <div id="moreMenu" class="menu" hidden>
+        <button id="setupBtn">New client setup</button>
+        <a id="reportLink" class="btnlink" target="_blank">Client report</a>
+        <button id="spikeBtn" title="Demo: one campaign starts spending 4x too fast">Simulate spend spike</button>
+        <button id="modeBtn" title="Switch between the agency view and a simpler view for one business">Simple view</button>
+        <a id="exportLink" class="btnlink agency-only">Export decision log</a>
+        <span id="acc" class="pill on"></span>
+      </div></div>
   </div>
   <nav id="nav">
     <a href="#goalSec">Goal</a><a href="#sec-approvals">Approvals <span id="navCount" class="count"></span></a>
-    <a href="#sec-campaigns">Campaigns</a><a href="#sec-doctor">Doctor</a><a href="#sec-channels">Channels</a>
-    <a href="#sec-tracking">Tracking</a><a href="#sec-skills">Skills</a><a href="#sec-changes">Changes</a>
-    <a href="#sec-rules">Rules</a><a href="#sec-audit">Audit trail</a><a href="#sec-tm">Time machine</a>
+    <a href="#sec-campaigns">Campaigns</a><a href="#sec-audit">Audit trail</a><a href="#sec-tools">More tools</a>
   </nav>
 </header>
 <div id="runPanel" hidden>
@@ -212,14 +234,16 @@ code { font-size: 12px; }
     <section id="sec-campaigns">
       <h2>Campaigns (last 7 days)</h2>
       <div id="clientCards" class="cards"></div>
-      <div class="scroll"><table id="camps"></table></div>
+      <div class="scroll"><table id="camps" class="compact"></table></div>
+      <button id="metricsBtn" class="link" style="margin-top:8px">Show all metrics (CPM, CPC, CTR, CVR, ROAS)</button>
     </section>
-    <section id="sec-doctor">
+    <div id="sec-tools" class="toolshead"><h3>More tools</h3><span class="muted">Click a section to open it.</span></div>
+    <section id="sec-doctor" class="fold">
       <h2>Campaign doctor</h2>
       <div class="muted" style="margin-bottom:8px">Every campaign checked against typical ranges for its platform. Campaigns without enough reliable data get no advice until they have it.</div>
       <div id="doctor"></div>
     </section>
-    <section id="sec-channels">
+    <section id="sec-channels" class="fold">
       <h2>Channels beyond ads</h2>
       <div class="tabs" id="chTabs">
         <button data-tab="ai" class="on">AI search (AEO/GEO)</button><button data-tab="comp">Competitors</button>
@@ -229,7 +253,7 @@ code { font-size: 12px; }
       <div id="chBody"><div class="empty">Pick one client to see its channels.</div></div>
       <div class="muted" style="margin-top:8px">Simulated data for the demo. Sources: ChatGPT, Perplexity, Gemini, Google AI Overviews and Claude answers; Meta Ad Library and Google Ads Transparency; Search Console; Google Business Profile.</div>
     </section>
-    <section id="sec-tracking">
+    <section id="sec-tracking" class="fold">
       <h2>Tracking and audiences</h2>
       <div class="tabs" id="trTabs">
         <button data-tr="utm" class="on">UTM audit</button><button data-tr="capi">Conversions API</button>
@@ -237,7 +261,7 @@ code { font-size: 12px; }
       </div>
       <div id="trBody"></div>
     </section>
-    <section id="sec-skills">
+    <section id="sec-skills" class="fold">
       <h2>Optimization skills</h2>
       <div class="tabs" id="skTabs">
         <button data-sk="marg" class="on">Next dollar returns</button><button data-sk="goal">Goal planner</button>
@@ -247,20 +271,20 @@ code { font-size: 12px; }
       </div>
       <div id="skBody"></div>
     </section>
-    <section id="sec-changes">
+    <section id="sec-changes" class="fold">
       <h2>Changes made</h2>
       <div class="scroll"><table id="changes"></table></div>
     </section>
-    <section id="sec-memory">
+    <section id="sec-memory" class="fold">
       <h2>Agent memory (past decisions and results)</h2>
       <div class="muted" style="margin-bottom:8px">Scoped to one client, expires after 180 days, and any approver can forget an entry.</div>
       <div class="scroll"><table id="mems"></table></div>
     </section>
-    <section>
+    <section class="fold" id="sec-conns">
       <h2>Connected accounts</h2>
       <div class="scroll"><table id="conns"></table></div>
     </section>
-    <section id="sec-rules">
+    <section id="sec-rules" class="fold">
       <h2>Rules in plain English</h2>
       <div class="row" style="gap:8px;justify-content:flex-start;flex-wrap:wrap">
         <input id="ruleIn" placeholder="never spend more than $150 a day on dental clients" style="font:inherit;flex:1;min-width:240px;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink)">
@@ -269,7 +293,7 @@ code { font-size: 12px; }
       <div class="muted" style="margin:6px 0 10px">Type a rule in plain words. You'll see exactly what it will do before it counts. Only the agency owner can switch it on, and every version is kept.</div>
       <div id="rules"></div>
     </section>
-    <section class="agency-only">
+    <section class="agency-only fold" id="sec-policies">
       <h2>Policies in Atlas</h2>
       <div class="scroll"><table id="pols"></table></div>
     </section>
@@ -279,7 +303,7 @@ code { font-size: 12px; }
       <h2>Audit trail</h2>
       <div id="events" class="events"></div>
     </section>
-    <section id="sec-tm">
+    <section id="sec-tm" class="fold">
       <h2>Time machine</h2>
       <div class="muted">Drag to any moment and see what the agent knew then: rules in force, budgets, what was waiting, and the kill switch.</div>
       <input id="tmSlider" type="range" min="0" max="1000" value="1000" style="width:100%;margin:12px 0 4px">
@@ -370,26 +394,33 @@ function evidenceHTML(ev) {
     <div class="muted" style="margin-top:4px">Data as of ${ev.data_as_of ? new Date(ev.data_as_of).toLocaleString() : "n/a"}</div>
   </details>`;
 }
+const ITEM_NAMES = {ad: "tracking link", aud: "retargeting tier", sync: "audience sync", keyword: "paid keyword",
+  review: "customer review", term: "search term"};
+function niceId(c) {
+  if (!c) return "";
+  const m = String(c).match(/^(ad|aud|sync|keyword|review|term):/);
+  return m ? ITEM_NAMES[m[1]] : c;
+}
 function eventLine(e) {
   const who = `<b>${esc(e.actor_id || "system")}</b>`;
   const act = e.action_id ? ` <button class="link" data-explain="${esc(e.action_id)}">${esc(e.action_id)}</button>` : "";
   switch (e.event) {
     case "policy_check":
-      return `${badge(e.effect)} ${who} ${esc(e.action_type)} ${esc(e.campaign_id || "")}${act}<div class="muted">${esc(e.policy_id)}: ${esc(e.why)}</div>`;
-    case "action_sent": if (e.system === "github") return `<span class="badge info">GITHUB</span> ${who} ${esc(e.action.type.replace("_", " "))} ${esc(e.campaign_id || e.client_id || "")}${act}`;
-      return `<span class="badge info">SENT</span> ${who} ${esc(e.action.type)} ${esc(e.campaign_id)}${act}`;
+      return `${badge(e.effect)} ${who} ${esc(e.action_type)} ${esc(niceId(e.campaign_id))}${act}<div class="muted">${esc(e.policy_id)}: ${esc(e.why)}</div>`;
+    case "action_sent": if (e.system === "github") return `<span class="badge info">GITHUB</span> ${who} ${esc(e.action.type.replace("_", " "))} ${esc(niceId(e.campaign_id) || e.client_id || "")}${act}`;
+      return `<span class="badge info">SENT</span> ${who} ${esc(e.action.type)} ${esc(niceId(e.campaign_id))}${act}`;
     case "action_result": {
       const r = e.result || {};
       if (e.system === "github") return `${r.ok && r.verified ? '<span class="badge allow">VERIFIED ON GITHUB</span>' : '<span class="badge deny">GITHUB FAILED</span>'} ${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">#${r.number || ""}</a>` : ""} <span class="muted">${esc(r.ok ? "issue " + (r.observed && r.observed.state) : r.error)}</span>`;
       const tag = !r.ok ? '<span class="badge deny">FAILED</span>' : r.verified ? '<span class="badge allow">VERIFIED</span>' : '<span class="badge pending">UNVERIFIED</span>';
-      return `${tag} ${esc(e.campaign_id)}${act}<div class="muted">${r.ok ? "platform now shows " + esc(JSON.stringify(r.observed)) : esc(r.error)}</div>`;
+      return `${tag} ${esc(niceId(e.campaign_id))}${act}<div class="muted">${r.ok ? "platform now shows " + esc(JSON.stringify(r.observed)) : esc(r.error)}</div>`;
     }
     case "circuit_breaker": return `<span class="badge deny">CIRCUIT BREAKER</span> ${who}<div class="muted">${esc(e.reason)}</div>`;
-    case "memory_recalled": return `<span class="badge ${e.warning ? "pending" : "info"}">MEMORY</span> ${who} ${esc(e.campaign_id)}<div class="muted">${esc(e.method)}: ${esc(e.summary || "no similar past moves")}</div>`;
+    case "memory_recalled": return `<span class="badge ${e.warning ? "pending" : "info"}">MEMORY</span> ${who} ${esc(niceId(e.campaign_id))}<div class="muted">${esc(e.method)}: ${esc(e.summary || "no similar past moves")}</div>`;
     case "memory_forgotten": return `<span class="badge info">FORGOT</span> ${who}<div class="muted">${esc(e.memory && e.memory.text)}</div>`;
     case "kill_switch": return `<span class="badge ${e.halted ? "deny" : "allow"}">${e.halted ? "HALTED" : "RESUMED"}</span> ${who} ${esc(e.reason || "")}`;
     case "action_blocked": return `<span class="badge deny">BLOCKED</span> ${who} ${esc(e.reason)}${act}`;
-    default: return `<span class="badge info">${esc(e.event.replace(/_/g, " ").toUpperCase())}</span> ${who} ${esc(e.campaign_id || e.run_id || "")}${act}`;
+    default: return `<span class="badge info">${esc(e.event.replace(/_/g, " ").toUpperCase())}</span> ${who} ${esc(niceId(e.campaign_id) || e.run_id || "")}${act}`;
   }
 }
 function render() {
@@ -436,14 +467,14 @@ function render() {
   sel.value = S.actors.some((a) => a._id === cur) ? cur : "user:ellie";
 
   const n0 = (x, d = 0) => x == null ? "n/a" : Number(x).toLocaleString(undefined, {maximumFractionDigits: d, minimumFractionDigits: d});
-  setHTML("camps", "<tr><th>Campaign</th><th>Platform</th><th>Budget/day</th><th>Spend</th><th>Impr.</th><th>Freq.</th><th>CPM</th><th>Clicks</th><th>CPC</th><th>CTR</th><th>Conv. verified / platform</th><th>CVR</th><th>CPA / target</th><th>ROAS</th></tr>" +
+  setHTML("camps", "<tr><th>Campaign</th><th>Platform</th><th>Budget/day</th><th>Spend</th><th class=x>Impr.</th><th class=x>Freq.</th><th class=x>CPM</th><th class=x>Clicks</th><th class=x>CPC</th><th class=x>CTR</th><th>Results</th><th class=x>CVR</th><th>Cost per result / goal</th><th class=x>ROAS</th></tr>" +
     S.campaigns.map((c) => { const k = c.kpis || {}; return `<tr><td>${esc(c.name)} ${c.tags.map((x) => `<span class="tag">${esc(x)}</span>`).join(" ")}${c.status !== "ACTIVE" ? ' <span class="tag">' + esc(c.status) + "</span>" : ""}${S.client === "all" ? `<div class="muted">${esc(c.client)}</div>` : ""}</td>
       <td>${plat(c.platform, c.platform_label)}</td><td class="k">${money(c.daily_budget)}</td><td class="k">${money(k.spend)}</td>
-      <td class="k">${n0(k.impressions)}</td><td class="k">${n0(k.frequency, 2)}</td><td class="k">${money(k.cpm)}</td><td class="k">${n0(k.clicks)}</td>
-      <td class="k">${money(k.cpc)}</td><td class="k">${n0(k.ctr, 2)}%</td>
+      <td class="k x">${n0(k.impressions)}</td><td class="k x">${n0(k.frequency, 2)}</td><td class="k x">${money(k.cpm)}</td><td class="k x">${n0(k.clicks)}</td>
+      <td class="k x">${money(k.cpc)}</td><td class="k x">${n0(k.ctr, 2)}%</td>
       <td class="k">${n0(k.conversions)} / ${n0(k.reported_conversions)}${k.platform_overcount_pct > 10 ? `<div class="muted">platform +${n0(k.platform_overcount_pct)}%</div>` : ""}</td>
-      <td class="k">${n0(k.cvr, 2)}%</td>
-      <td class="k">${money(k.cpa)}<div class="muted">${money(c.target_cpl)}</div></td><td class="k">${k.roas == null ? "n/a" : n0(k.roas, 2) + "x"}</td></tr>`; }).join(""));
+      <td class="k x">${n0(k.cvr, 2)}%</td>
+      <td class="k">${money(k.cpa)}<div class="muted">${money(c.target_cpl)}</div></td><td class="k x">${k.roas == null ? "n/a" : n0(k.roas, 2) + "x"}</td></tr>`; }).join(""));
 
   setHTML("props", S.proposals.length ? S.proposals.map((p) => `<div class="card">
       <div class="row"><b>${plat(p.platform)} ${esc(p.campaign_id)}: ${esc(p.action.type)} ${p.action.type === "set_budget" ? money(p.action.old) + " → " + money(p.action.new) : p.action.type === "set_targeting" ? "ages " + p.action.new.age_min + " to " + p.action.new.age_max : p.action.label ? esc(p.action.label) : ""}</b>
@@ -721,6 +752,19 @@ async function explain(id) {
   $("dlgBody").innerHTML = steps.map(([a, b]) => `<div class="step"><b>${esc(a)}</b>${esc(b)}</div>`).join("") || '<div class="empty">No records.</div>';
   $("dlg").showModal();
 }
+document.addEventListener("click", (ev) => {
+  const h = ev.target.closest("section.fold > h2");
+  if (h) { h.parentElement.classList.toggle("open"); return; }
+  const nav = ev.target.closest('#nav a[href^="#sec-"]');
+  if (nav) { const t = document.querySelector(nav.getAttribute("href")); if (t && t.classList.contains("fold")) t.classList.add("open"); }
+  if (ev.target.id === "moreBtn") { $("moreMenu").hidden = !$("moreMenu").hidden; return; }
+  if (!ev.target.closest(".menuwrap")) $("moreMenu").hidden = true;
+  else if (ev.target.closest("#moreMenu button, #moreMenu a")) setTimeout(() => ($("moreMenu").hidden = true), 50);
+  if (ev.target.id === "metricsBtn") {
+    const c = $("camps").classList.toggle("compact");
+    ev.target.textContent = c ? "Show all metrics (CPM, CPC, CTR, CVR, ROAS)" : "Show fewer metrics";
+  }
+});
 document.addEventListener("click", async (ev) => {
   const rb = ev.target.closest("button[data-rule]");
   if (rb) return post("/api/rules/decide", {id: rb.dataset.rule, activate: rb.dataset.act === "1"});
