@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Budget Agent Audit</title>
+<style>
+:root {
+  --bg: #f6f5f2; --panel: #ffffff; --ink: #1d1d1f; --muted: #6b6b70; --line: #e4e2dc;
+  --allow: #1f7a4d; --allow-bg: #e3f3ea; --wait: #8a5a00; --wait-bg: #fbf0d9;
+  --deny: #b42318; --deny-bg: #fde8e6; --info: #2a4fa3; --info-bg: #e7edfb; --accent: #1d1d1f;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #141416; --panel: #1d1d20; --ink: #ececee; --muted: #9a9aa2; --line: #2e2e33;
+    --allow: #5fd39a; --allow-bg: #173327; --wait: #f0c069; --wait-bg: #3a2d12;
+    --deny: #ff8a80; --deny-bg: #3d1a17; --info: #8fb0ff; --info-bg: #1b2440; --accent: #ececee; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif; }
+header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;
+  padding: 14px 20px; border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 2; }
+h1 { font-size: 17px; margin: 0; }
+h1 small { color: var(--muted); font-weight: 400; margin-left: 8px; }
+h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; }
+.controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+select, button { font: inherit; border-radius: 8px; border: 1px solid var(--line); background: var(--panel);
+  color: var(--ink); padding: 6px 10px; cursor: pointer; }
+button:hover { border-color: var(--muted); }
+button.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+button.danger { background: var(--deny); color: #fff; border-color: var(--deny); }
+button.ok { background: var(--allow); color: #fff; border-color: var(--allow); }
+button.link { border: none; padding: 0; background: none; color: var(--info); text-decoration: underline; }
+.pill { padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.pill.on { background: var(--allow-bg); color: var(--allow); }
+.pill.off { background: var(--deny-bg); color: var(--deny); }
+main { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; padding: 16px 20px; }
+@media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 12px 16px; } }
+section { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 16px; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 500; font-size: 12px; }
+td.num { font-variant-numeric: tabular-nums; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.ccard { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; cursor: pointer; }
+.ccard:hover { border-color: var(--muted); }
+.ccard b { display: block; }
+.plat { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; white-space: nowrap; color: #fff; }
+.p-meta { background: #1877f2; } .p-google { background: #188038; } .p-tiktok { background: #111; }
+.p-reddit { background: #ff4500; } .p-shopify { background: #5e8e3e; } .p-sandbox { background: #777; }
+.tag { font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--info-bg); color: var(--info); }
+.badge { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 4px; white-space: nowrap; }
+.allow { background: var(--allow-bg); color: var(--allow); }
+.require_approval, .pending { background: var(--wait-bg); color: var(--wait); }
+.deny { background: var(--deny-bg); color: var(--deny); }
+.info { background: var(--info-bg); color: var(--info); }
+.card { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+.card .row { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+.muted { color: var(--muted); font-size: 12px; }
+.empty { color: var(--muted); font-style: italic; }
+.events { max-height: 640px; overflow: auto; }
+.ev { display: grid; grid-template-columns: 62px 1fr; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.ev time { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.scroll { overflow-x: auto; }
+#toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); max-width: 90vw;
+  padding: 10px 16px; border-radius: 10px; font-weight: 500; display: none; z-index: 5; }
+dialog { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--ink);
+  width: min(760px, 94vw); max-height: 86vh; padding: 0; }
+dialog .head { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+dialog .body { padding: 14px 16px; overflow: auto; max-height: 72vh; }
+.step { border-left: 3px solid var(--line); padding: 4px 0 10px 12px; margin-left: 4px; }
+.step b { display: block; }
+code { font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Budget agent <small id="acct">audited, multi client</small></h1>
+  <div class="controls">
+    <span id="halt" class="pill"></span>
+    <label class="muted" for="client">Client</label>
+    <select id="client"></select>
+    <label class="muted" for="actor">Acting as</label>
+    <select id="actor"></select>
+    <button id="run" class="primary">Run agent now</button>
+    <button id="haltBtn" class="danger">Halt agent</button>
+  </div>
+</header>
+<main>
+  <div>
+    <section>
+      <h2>Campaigns (last 7 days)</h2>
+      <div id="clientCards" class="cards"></div>
+      <div class="scroll"><table id="camps"></table></div>
+    </section>
+    <section>
+      <h2>Waiting for approval</h2>
+      <div id="props"></div>
+    </section>
+    <section>
+      <h2>Changes made</h2>
+      <div class="scroll"><table id="changes"></table></div>
+    </section>
+    <section>
+      <h2>Connected accounts</h2>
+      <div class="scroll"><table id="conns"></table></div>
+    </section>
+    <section>
+      <h2>Policies in Atlas</h2>
+      <div class="scroll"><table id="pols"></table></div>
+    </section>
+  </div>
+  <div>
+    <section>
+      <h2>Audit trail</h2>
+      <div id="events" class="events"></div>
+    </section>
+  </div>
+</main>
+<div id="toast"></div>
+<dialog id="dlg"><div class="head"><b id="dlgTitle">Explain</b><button id="dlgClose">Close</button></div><div class="body" id="dlgBody"></div></dialog>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const money = (n) => n == null ? "n/a" : "$" + Number(n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const t = (d) => d ? new Date(d).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"}) : "";
+let S = null;
+// Only touch the DOM when content changed, so buttons are not swapped out mid click.
+const setHTML = (id, html) => { const el = $(id); if (el._last !== html) { el.innerHTML = html; el._last = html; } };
+try { $("actor").dataset.saved = localStorage.getItem("actor") || ""; } catch (e) {}
+let CLIENT = "all";
+try { CLIENT = localStorage.getItem("client") || "all"; } catch (e) {}
+const plat = (p, label) => `<span class="plat p-${esc(p)}">${esc(label || p)}</span>`;
+
+function toast(msg, ok) {
+  const el = $("toast");
+  el.textContent = msg; el.className = ok ? "allow" : "deny"; el.style.display = "block";
+  clearTimeout(el._t); el._t = setTimeout(() => (el.style.display = "none"), 4200);
+}
+async function post(path, body) {
+  const r = await fetch(path, {method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({actor: $("actor").value, client: CLIENT === "all" ? null : CLIENT, ...body})});
+  const j = await r.json();
+  if (j.ok === false) toast(j.error || "Denied", false);
+  else toast(j.status ? "Done: " + j.status : "Done", true);
+  await load();
+  return j;
+}
+function badge(effect) {
+  const label = {allow: "ALLOW", require_approval: "NEEDS APPROVAL", deny: "DENY"}[effect] || effect;
+  return `<span class="badge ${esc(effect)}">${esc(label)}</span>`;
+}
+function eventLine(e) {
+  const who = `<b>${esc(e.actor_id || "system")}</b>`;
+  const act = e.action_id ? ` <button class="link" data-explain="${esc(e.action_id)}">${esc(e.action_id)}</button>` : "";
+  switch (e.event) {
+    case "policy_check":
+      return `${badge(e.effect)} ${who} ${esc(e.action_type)} ${esc(e.campaign_id || "")}${act}<div class="muted">${esc(e.policy_id)}: ${esc(e.why)}</div>`;
+    case "action_sent": return `<span class="badge info">SENT</span> ${who} ${esc(e.action.type)} ${esc(e.campaign_id)}${act}`;
+    case "action_result": {
+      const r = e.result || {};
+      const tag = !r.ok ? '<span class="badge deny">FAILED</span>' : r.verified ? '<span class="badge allow">VERIFIED</span>' : '<span class="badge pending">UNVERIFIED</span>';
+      return `${tag} ${esc(e.campaign_id)}${act}<div class="muted">${r.ok ? "platform now shows " + esc(JSON.stringify(r.observed)) : esc(r.error)}</div>`;
+    }
+    case "kill_switch": return `<span class="badge ${e.halted ? "deny" : "allow"}">${e.halted ? "HALTED" : "RESUMED"}</span> ${who} ${esc(e.reason || "")}`;
+    case "action_blocked": return `<span class="badge deny">BLOCKED</span> ${who} ${esc(e.reason)}${act}`;
+    default: return `<span class="badge info">${esc(e.event.replace(/_/g, " ").toUpperCase())}</span> ${who} ${esc(e.campaign_id || e.run_id || "")}${act}`;
+  }
+}
+function render() {
+  S.halted = S.client === "all" ? S.halted_global : S.halted_client;
+  const stopped = S.halted_global || S.halted_client;
+  const cname = (S.clients.find((c) => c._id === S.client) || {}).name;
+  $("halt").textContent = S.halted_global ? "ALL CLIENTS HALTED" : S.halted_client ? "HALTED FOR " + cname : "AGENT RUNNING";
+  $("halt").className = "pill " + (stopped ? "off" : "on");
+  $("haltBtn").textContent = (S.halted ? "Resume " : "Halt ") + (S.client === "all" ? "all clients" : cname);
+  $("haltBtn").className = S.halted ? "ok" : "danger";
+  const copts = `<option value="all">All clients (agency view)</option>` + S.clients.map((c) =>
+    `<option value="${esc(c._id)}">${esc(c.name)}${S.pending_by_client[c._id] ? " · " + S.pending_by_client[c._id] + " waiting" : ""}</option>`).join("");
+  const csel = $("client");
+  if (csel.dataset.opts !== copts) { csel.innerHTML = copts; csel.dataset.opts = copts; }
+  csel.value = S.client;
+  setHTML("clientCards", S.client !== "all" ? "" : S.clients.map((c) => {
+    const rows = S.campaigns.filter((x) => x.client === c.name);
+    const spend = rows.reduce((a, x) => a + x.spend, 0);
+    const plats = [...new Set(S.connections.filter((x) => x.client === c.name).map((x) => x.platform))];
+    return `<div class="ccard" data-client="${esc(c._id)}"><b>${esc(c.name)}</b><span class="muted">${esc(c.industry)} · ${money(spend)} in 7 days</span>
+      <div style="margin-top:6px">${plats.map((p) => plat(p, {meta: "FB + IG", google: "Google", tiktok: "TikTok", reddit: "Reddit", shopify: "Shopify"}[p])).join(" ")}</div>
+      <div class="muted" style="margin-top:4px">${S.pending_by_client[c._id] || 0} waiting for approval${S.halted_clients.includes(c._id) ? " · <b style='color:var(--deny);display:inline'>halted</b>" : ""}</div></div>`;
+  }).join(""));
+  setHTML("conns", "<tr><th>Client</th><th>Platform</th><th>Account</th><th>Mode</th></tr>" +
+    S.connections.map((c) => `<tr><td>${esc(c.client)}</td><td>${plat(c.platform, c.label)}</td><td>${esc(c.name)}</td><td class="muted">${esc(c.mode)}</td></tr>`).join(""));
+
+  const sel = $("actor"), cur = sel.value || sel.dataset.saved || "user:ellie";
+  const opts = S.actors.filter((a) => a.kind === "human").map((a) =>
+    `<option value="${esc(a._id)}">${esc(a.name)}</option>`).join("");
+  if (sel.dataset.opts !== opts) { sel.innerHTML = opts; sel.dataset.opts = opts; }
+  sel.value = S.actors.some((a) => a._id === cur) ? cur : "user:ellie";
+
+  setHTML("camps", "<tr><th>Campaign</th><th>Platform</th><th>Status</th><th>Budget/day</th><th>Spend</th><th>Leads</th><th>CPL / target</th></tr>" +
+    S.campaigns.map((c) => `<tr><td>${esc(c.name)} ${c.tags.map((x) => `<span class="tag">${esc(x)}</span>`).join(" ")}${S.client === "all" ? `<div class="muted">${esc(c.client)}</div>` : ""}</td><td>${plat(c.platform, c.platform_label)}</td>
+      <td>${esc(c.status)}</td><td class="num">${money(c.daily_budget)}</td><td class="num">${money(c.spend)}</td>
+      <td class="num">${c.conversions}</td><td class="num">${money(c.cpl)}<div class="muted">${money(c.target_cpl)}</div></td></tr>`).join(""));
+
+  setHTML("props", S.proposals.length ? S.proposals.map((p) => `<div class="card">
+      <div class="row"><b>${plat(p.platform)} ${esc(p.campaign_id)}: ${esc(p.action.type)} ${p.action.new != null ? money(p.action.old) + " → " + money(p.action.new) : ""}</b>
+      <span class="muted">${esc(p.policy_id)}</span></div>
+      <div>${esc(p.reason.text)}</div>
+      <div class="row" style="margin-top:8px"><span class="muted">asked by ${esc(p.requested_by)} · <button class="link" data-explain="${esc(p.action_id)}">${esc(p.action_id)}</button></span>
+      <span><button data-decide="reject" data-id="${esc(p._id)}">Reject</button> <button class="ok" data-decide="approve" data-id="${esc(p._id)}">Approve</button></span></div>
+    </div>`).join("") : '<div class="empty">Nothing waiting.</div>');
+
+  setHTML("changes", "<tr><th>Time</th><th>Campaign</th><th>Change</th><th>By</th><th>Result</th><th></th></tr>" +
+    (S.changes.map((c) => `<tr><td>${t(c.applied_at)}</td><td>${esc(c.campaign_id)}</td>
+      <td>${esc(c.action.type)} ${c.action.type === "set_budget" ? money(c.action.old) + " → " + money(c.action.new) : ""}${c.reverts ? ' <span class="tag">undo</span>' : ""}</td>
+      <td>${esc(c.actor_id)}<div class="muted">${esc(c.mode)}${c.approval ? ", approved by " + esc(c.approval.approved_by) : ""}</div></td>
+      <td>${c.result.ok ? (c.result.verified ? badge("allow").replace("ALLOW", "VERIFIED") : '<span class="badge pending">UNVERIFIED</span>') : badge("deny").replace("DENY", "FAILED")}</td>
+      <td><button class="link" data-explain="${esc(c.action_id)}">explain</button>${c.result.ok && !c.reverts ? ` · <button class="link" data-undo="${esc(c._id)}">undo</button>` : ""}</td></tr>`).join("") ||
+      '<tr><td colspan="6" class="empty">No changes yet.</td></tr>'));
+
+  setHTML("pols", "<tr><th>#</th><th>Policy</th><th>Roles</th><th>Actions</th><th>Effect</th></tr>" +
+    S.policies.map((p) => `<tr><td class="num">${p.priority}</td><td><code>${esc(p._id)}</code><div class="muted">${esc(p.why)}</div></td>
+      <td>${esc(p.roles.join(", "))}</td><td>${esc(p.actions.join(", "))}</td><td>${badge(p.effect)}</td></tr>`).join(""));
+
+  setHTML("events", S.events.map((e) => `<div class="ev"><time>${t(e.at)}</time><div>${eventLine(e)}</div></div>`).join("") ||
+    '<div class="empty">No events yet. Press "Run agent now".</div>');
+}
+async function load() {
+  const r = await fetch("/api/state?client=" + encodeURIComponent(CLIENT));
+  S = await r.json();
+  render();
+}
+async function explain(id) {
+  const x = await (await fetch("/api/explain?id=" + encodeURIComponent(id))).json();
+  const steps = [];
+  if (x.proposal) steps.push(["Proposed", `${x.proposal.requested_by} asked: ${x.proposal.reason.text}`]);
+  for (const e of x.events) {
+    let text = e.event.replace(/_/g, " ");
+    if (e.event === "policy_check") text = `Policy check as ${e.actor_id} (${(e.roles || []).join(", ")}): ${e.effect} by ${e.policy_id}. ${e.why}`;
+    else if (e.event === "action_sent") text = `${e.actor_id} sent ${e.action.type} to the ad platform`;
+    else if (e.event === "action_result") text = e.result.ok ? `Platform re-read: ${JSON.stringify(e.result.observed)} (${e.result.verified ? "verified" : "not verified"})` : `Failed: ${e.result.error}`;
+    else if (e.actor_id) text += ` by ${e.actor_id}`;
+    steps.push([t(e.at), text]);
+  }
+  for (const u of x.undone_by) steps.push(["Undone", `${u.actor_id} reverted it at ${t(u.applied_at)} (${u.action_id})`]);
+  $("dlgTitle").textContent = "Reconstruct action " + id;
+  $("dlgBody").innerHTML = steps.map(([a, b]) => `<div class="step"><b>${esc(a)}</b>${esc(b)}</div>`).join("") || '<div class="empty">No records.</div>';
+  $("dlg").showModal();
+}
+document.addEventListener("click", async (ev) => {
+  const card = ev.target.closest(".ccard");
+  if (card) { CLIENT = card.dataset.client; try { localStorage.setItem("client", CLIENT); } catch (e) {} return load(); }
+  const b = ev.target.closest("button"); if (!b) return;
+  if (b.dataset.explain) return explain(b.dataset.explain);
+  if (b.dataset.decide) return post("/api/decide", {id: b.dataset.id, decision: b.dataset.decide});
+  if (b.dataset.undo) return post("/api/undo", {id: b.dataset.undo});
+});
+$("run").onclick = async () => {
+  const r = await fetch("/api/run", {method: "POST", body: "{}"}); const j = await r.json();
+  toast(j.halted ? "Agent is halted. Nothing ran." : `Run ${j.run_id}: ${j.applied} applied, ${j.proposed} proposed, ${j.denied} denied`, !j.halted);
+  load();
+};
+$("haltBtn").onclick = () => {
+  const halting = !S.halted;
+  const reason = halting ? (prompt("Why are you halting the agent?", "Manual stop") || "") : "";
+  post("/api/halt", {halted: halting, reason});
+};
+$("client").onchange = () => { CLIENT = $("client").value; try { localStorage.setItem("client", CLIENT); } catch (e) {} load(); };
+$("actor").onchange = () => { try { localStorage.setItem("actor", $("actor").value); } catch (e) {} };
+$("dlgClose").onclick = () => $("dlg").close();
+load(); setInterval(() => { if (!$("dlg").open) load(); }, 3000);
+</script>
+</body>
+</html>
